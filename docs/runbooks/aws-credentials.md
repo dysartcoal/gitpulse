@@ -45,29 +45,35 @@ Context and reasoning: see [ADR-0007](../adr/0007-iam-user-with-mfa-over-identit
    With this attached alongside `AdministratorAccess`, the explicit `Deny` wins whenever MFA isn't present on the request — the raw access key stops working for anything except the handful of self-service actions listed, including the `GetSessionToken` call itself. Real work is only possible through an MFA-backed session token from here on.
 7. Configure a bootstrap-only AWS CLI profile with the access key:
    ```
-   aws configure --profile gitpulse-longlived
+   aws configure --profile gitpulse-admin-longlived
    ```
    (enter the access key, secret key, default region `eu-west-2`, output format `json`)
 
 ## Every working session (credentials expire — repeat this when they do)
 
 1. Get an MFA code from your authenticator app for the `gitpulse-admin` device.
-2. Mint a session token (36 hours is the maximum for a plain `get-session-token` call with no role involved):
+2. Mint a session token (36 hours is the maximum for a plain `get-session-token` call with no role involved). Command template — copy this, don't retype it from memory:
    ```
    aws sts get-session-token \
-     --profile gitpulse-longlived \
-     --serial-number arn:aws:iam::<account-id>:mfa/gitpulse-admin \
-     --token-code <code-from-authenticator-app> \
+     --profile gitpulse-admin-longlived \
+     --serial-number arn:aws:iam::<aws-account-id>:mfa/<MFA-device-name> \
+     --token-code <the-6-digit-token-from-authenticator> \
      --duration-seconds 129600
    ```
-3. This returns an `AccessKeyId`, `SecretAccessKey`, and `SessionToken`. Put these into a separate working profile, e.g. by editing `~/.aws/credentials`:
+   Not sure of the exact serial number? Run `aws iam list-mfa-devices --user-name gitpulse-admin --profile gitpulse-admin-longlived` and copy the `SerialNumber` it returns, rather than retyping the ARN by hand.
+3. This returns an `AccessKeyId`, `SecretAccessKey`, and `SessionToken`. Put these into the working profile, `gitpulse-admin-session`, by editing `~/.aws/credentials`:
    ```
-   [gitpulse]
+   [gitpulse-admin-session]
    aws_access_key_id = <from step 2>
    aws_secret_access_key = <from step 2>
    aws_session_token = <from step 2>
    ```
-4. Use this profile for everything — AWS CLI (`--profile gitpulse`) and Terraform (`AWS_PROFILE=gitpulse terraform plan`). When it expires (after up to 36 hours), repeat steps 1–3.
+4. Use this profile for everything — AWS CLI (`--profile gitpulse-admin-session`) and Terraform (`AWS_PROFILE=gitpulse-admin-session terraform plan`). When it expires (after up to 36 hours), repeat steps 1–3.
+
+## Tips
+
+- **Finding `~/.aws/credentials` in Finder:** it's a hidden folder, so Finder won't show it by browsing normally. In Finder, press `Cmd+Shift+G`, type `~/.aws`, and press Enter to jump straight there — or press `Cmd+Shift+.` (period) at any time to toggle hidden files/folders on and off in the current Finder window.
+- Confirm a session token is actually working, not just well-formed, with `aws sts get-caller-identity --profile gitpulse-admin-session` — it should return the `gitpulse-admin` user's ARN.
 
 ## What this is not
 
