@@ -4,7 +4,7 @@ A self-directed data platform project that ingests GitHub's public event stream 
 
 ## Why this project exists
 
-I'm Kim Littlejohn, a senior data engineer using time between roles deliberately: closing specific, named skills gaps rather than working through generic tutorials. Every phase of this project maps to a concrete requirement drawn from real job adverts I've applied against — see [`docs/adr/`](docs/adr/) for the reasoning behind each significant decision, and [`docs/phases/`](docs/phases/) for what was actually built, what broke, and what I'd do differently, phase by phase.
+I'm a senior data engineer using time between roles deliberately: closing specific, named skills gaps rather than working through generic tutorials. Every phase of this project maps to a concrete requirement drawn from real job adverts I've applied against — see [`docs/adr/`](docs/adr/) for the reasoning behind each significant decision, and [`docs/phases/`](docs/phases/) for what was actually built, what broke, and what I'd do differently, phase by phase.
 
 This is a personal learning project, built and documented in the open so the process — not just a finished result — is visible.
 
