@@ -4,7 +4,9 @@
 *.pem
 *.key
 credentials.json
-aws-credentials*
+accessKeys.csv
+credentials.csv
+.aws-credentials
 secrets.tfvars
 *.secrets.yaml
 
