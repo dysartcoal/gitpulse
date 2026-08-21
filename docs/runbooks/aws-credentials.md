@@ -1,6 +1,6 @@
 # Runbook — getting AWS credentials for local CLI/Terraform work
 
-Context and reasoning: see [ADR-0007](../adr/0007-iam-user-with-mfa-over-identity-center.md). This is the practical "how" behind that decision — the `gitpulse-admin` IAM user's own access key is never used directly; every real working session uses a short-lived session token minted from it via MFA.
+Context and reasoning: see [ADR-0007](../adr/0007-iam-user-with-mfa-over-identity-center.md). The `gitpulse-admin` IAM user's access key exists only to bootstrap a session token via MFA — and per step 6 below, that's enforced by policy, not just a habit to remember.
 
 ## One-time setup (do this once, before any of this project's Terraform/CLI work)
 
@@ -8,8 +8,42 @@ Context and reasoning: see [ADR-0007](../adr/0007-iam-user-with-mfa-over-identit
 2. Attach the AWS-managed `AdministratorAccess` policy directly (or via an `Administrators` group).
 3. Enable console access with a strong, unique password.
 4. Add an MFA device to this user (Security credentials tab → Assign MFA device → virtual authenticator app such as Google Authenticator, 1Password, or Authy). Note the device's ARN — it looks like `arn:aws:iam::<account-id>:mfa/gitpulse-admin`.
-5. Create an access key for this user (Security credentials tab → Create access key → "Command Line Interface (CLI)" use case). Store the Access Key ID and Secret Access Key in a password manager — this is the long-lived credential, and it is only ever used for step 2 below, never for actual AWS operations.
-6. Configure a bootstrap-only AWS CLI profile with that key:
+5. Create an access key for this user (Security credentials tab → Create access key → "Command Line Interface (CLI)" use case). Store the Access Key ID and Secret Access Key in a password manager.
+6. **Attach the MFA-enforcement policy** — this is what makes step 5's key actually safe to have. IAM → Users → gitpulse-admin → Add permissions → Create inline policy → JSON tab → paste the policy below → name it `RequireMFAForAllActions`:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "AllowViewAccountInfo",
+         "Effect": "Allow",
+         "Action": ["iam:GetAccountSummary", "iam:ListVirtualMFADevices"],
+         "Resource": "*"
+       },
+       {
+         "Sid": "AllowManageOwnUserMFA",
+         "Effect": "Allow",
+         "Action": ["iam:DeactivateMFADevice", "iam:EnableMFADevice", "iam:GetUser", "iam:ListMFADevices", "iam:ResyncMFADevice"],
+         "Resource": "arn:aws:iam::*:user/${aws:username}"
+       },
+       {
+         "Sid": "AllowGetSessionTokenWithMFA",
+         "Effect": "Allow",
+         "Action": "sts:GetSessionToken",
+         "Resource": "*"
+       },
+       {
+         "Sid": "DenyAllExceptListedIfNoMFA",
+         "Effect": "Deny",
+         "NotAction": ["iam:GetAccountSummary", "iam:ListVirtualMFADevices", "iam:DeactivateMFADevice", "iam:EnableMFADevice", "iam:GetUser", "iam:ListMFADevices", "iam:ResyncMFADevice", "sts:GetSessionToken"],
+         "Resource": "*",
+         "Condition": { "BoolIfExists": { "aws:MultiFactorAuthPresent": "false" } }
+       }
+     ]
+   }
+   ```
+   With this attached alongside `AdministratorAccess`, the explicit `Deny` wins whenever MFA isn't present on the request — the raw access key stops working for anything except the handful of self-service actions listed, including the `GetSessionToken` call itself. Real work is only possible through an MFA-backed session token from here on.
+7. Configure a bootstrap-only AWS CLI profile with the access key:
    ```
    aws configure --profile gitpulse-longlived
    ```
