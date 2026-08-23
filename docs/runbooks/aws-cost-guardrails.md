@@ -1,6 +1,6 @@
 # Runbook — AWS cost guardrails (Budgets, billing alarm, Cost Explorer)
 
-Context: this account runs on a one-time $100 Free Tier credit (see ADR-0003), not an ongoing budget. The guardrails below are belt-and-braces on purpose — three independent tripwires, so a mistake in one doesn't mean nothing catches an unexpected bill. Fill in the "Configured" lines below once each step is actually done, so this file becomes the single place to check "what's watching my spend and where."
+Context: this account runs on a one-time $100 Free Tier credit (see ADR-0003), not an ongoing budget. The guardrails below are belt-and-braces on purpose — three independent tripwires, so a mistake in one doesn't mean nothing catches an unexpected bill. This file becomes the single place to check "what's watching my spend and where."
 
 ## 1. A cost budget for the whole credit (the main guardrail)
 
@@ -16,7 +16,7 @@ This tracks total spend against the $100 credit directly, over the ~6-month wind
 7. Notification preferences → Email recipients: your email address, on every threshold.
 8. Review → **Create budget**.
 
-**Configured:** _(fill in once done)_ Name: `____`. Created: `____`. End date: `____`.
+**Configured:** Name: `gitpulse-free-tier-credit`. Created: `2026-08-22`. End date: `2027-02-20`.
 
 ## 2. A monthly cost budget (catches one bad month early)
 
@@ -24,7 +24,7 @@ The credit budget above only warns as the *total* climbs — a single expensive 
 
 **Steps:** Same flow as above, but: Budget name `gitpulse-monthly`, Period **Monthly**, Renewal type **Recurring budget**, Budgeting method **Fixed**, amount **$15**. Same three alert thresholds (50%/80%/100%), same email.
 
-**Configured:** _(fill in once done)_ Amount: `____`.
+**Configured:**  Name: `gitpulse-monthly`. Amount: `$15`.
 
 ## 3. A CloudWatch billing alarm (a blunt, independent backstop)
 
@@ -39,7 +39,7 @@ This exists in case Budgets itself is ever misconfigured or silently fails to no
 6. Notification: create/select an SNS topic with your email as a subscriber.
 7. Name it `gitpulse-billing-alarm` → Create alarm. Check your email for the SNS subscription confirmation link — the alarm won't actually notify you until that's confirmed.
 
-**Configured:** _(fill in once done)_ Threshold: `____`. SNS topic: `____`.
+**Configured:** Name: `gitpulse-billing-alarm`. Threshold: `$20`. SNS topic: `Default_CloudWatch_Alarms_Topic`.
 
 ## 4. Cost Explorer (for understanding *what* is costing money, not just *how much*)
 
