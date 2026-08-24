@@ -1,6 +1,6 @@
 # Phase 0 log — Foundations
 
-**Status:** In progress
+**Status:** In progress — paused 2026-08-24 while Kim prepares for a Royal London interview (Thursday)
 **Started:** 2026-08-21
 
 ## Done
@@ -19,8 +19,15 @@
 
 ## Next
 
+**Picking back up here after the Royal London interview:**
+
+1. Review the Phase 1 design artefacts (`specs/001-github-events-ingestion/plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`) — not yet reviewed as of 2026-08-24.
+2. Push the local commits sitting on `main` up to `origin/main` (this environment can commit locally but can't push — do this via VS Code or Terminal).
+3. Run `/speckit-tasks` to turn the reviewed plan into a concrete Phase 1 task list.
+
+Other outstanding items, lower priority than the above:
+
 - Check back on AWS Cost Explorer once it's populated (~24h after enabling) and tighten Cost Anomaly Detection from its $100/40% default down to ~$10-15 — also flagged in `00_PROJECT_PLAN.md`'s Phase 1 section as an easy-to-forget item.
-- Review the Phase 1 plan (`specs/001-github-events-ingestion/plan.md` and its research/data-model/contracts), then run `/speckit-tasks` to turn it into a concrete task list.
 - Add branch protection on `main` once Phase 1's first CI check exists to require.
 
 ## Decisions / notes
