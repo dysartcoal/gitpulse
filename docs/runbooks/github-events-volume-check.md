@@ -8,8 +8,7 @@ events lost") and SC-003 ("catches up without gaps") as achievable — per Const
 a decision without evidence is treated as unresolved, so this closes that gap with real data
 instead of an assumption.
 
-## 1. A one-off empirical check (do this before implementation, and again before Phase 1 is
-   considered done)
+## 1. A one-off empirical check (do this before implementation, and again before Phase 1 is considered done)
 
 No pipeline needed for this — it's two plain requests against the live API.
 

@@ -52,3 +52,18 @@ logs/
 .vscode/
 .idea/
 .DS_Store
+
+# --- Phase 1 runtime pipeline output (raw/quarantine stores) ---
+# Local raw/ and quarantine/ stores the consumer writes at runtime - documented
+# as gitignored in plan.md's Project Structure, added here to actually match.
+/data/
+
+# --- Exploration output (investigations & scratch) ---
+# Ad hoc/exploratory work and manual test output that isn't part of the shipped
+# project or the formal pytest suite - see exploration/README.md. Only the
+# README.md guide at each level is tracked; everything else here is disposable
+# or evidence-only and shouldn't live in git history.
+/exploration/investigations/*
+!/exploration/investigations/README.md
+/exploration/scratch/*
+!/exploration/scratch/README.md
