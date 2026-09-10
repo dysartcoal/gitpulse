@@ -38,6 +38,11 @@ the medallion architecture actually requires shared, durable object storage.
 `testcontainers-python`'s Kafka module for an integration test that publishes a sample event to a
 real local Kafka broker in CI and asserts it lands correctly in the raw store — not a mock, per
 ADR-0006. GitHub Actions runs lint, unit tests, and the integration test on every pull request.
+**Tests are written alongside each user story's own implementation tasks as it's built (Story 1's
+polling/parsing/idempotency/raw-writer, Story 2's quarantine routing), not deferred to a separate
+later phase** — this is what "tested from the first commit" (ADR-0006, Constitution Principle IV)
+actually means in practice, and `/speckit-tasks` should generate task lists accordingly rather than
+treating User Story 3 as the only place tests appear.
 
 **Target Platform**: Developer laptop and GitHub Actions CI runner, both via Docker Compose on
 Linux containers. No cloud compute is required for Phase 1.

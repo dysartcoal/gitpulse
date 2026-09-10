@@ -53,8 +53,17 @@ pytest tests/integration   # spins up a real local Kafka via testcontainers
 Then deliberately introduce a defect (e.g. break the idempotency de-duplication key) on a branch,
 open a PR, and confirm GitHub Actions' CI run fails before merge is possible.
 
+**5. Volume check — is the poll window actually keeping up? (research.md's open question)**
+
+Once the stack has been running for a meaningful period (at least the first 24–48h of real
+operation), work through Part 3 of `docs/runbooks/github-events-volume-check.md`: re-run the
+empirical check from that runbook and cross-reference it against any "poll returned the maximum
+300 events" warnings logged during the run. This is the review step that confirms ADR-0002's
+"lower volume" assumption actually held under real conditions, not just at design time.
+
 ## Expected outcome
 
-All four scenarios above hold without manual intervention beyond the deliberate actions described
+All five scenarios above hold without manual intervention beyond the deliberate actions described
 (stopping/restarting the consumer, introducing the deliberate defect) — matching SC-001 through
-SC-004 in `spec.md`.
+SC-004 in `spec.md`, plus the volume check confirming the source API's own 300-event window isn't
+silently truncating real data.

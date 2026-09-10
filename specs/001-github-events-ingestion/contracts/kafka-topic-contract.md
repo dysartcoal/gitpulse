@@ -26,8 +26,9 @@ quarantine path in the consumer always has the true original payload to store (F
 
 The consumer MUST:
 - Deserialize each message as JSON; a message that isn't valid JSON at all routes to quarantine
-  with reason `"not valid JSON"` (still using the message key as the best-effort `received_at`
-  correlation point).
+  with reason `"not valid JSON"`. `received_at` (the consumer's own receipt timestamp, per
+  `data-model.md`) is always available regardless of whether the message parses, so this case is
+  no different from any other quarantine write.
 - Validate the deserialized object against the Activity Event envelope (`data-model.md`); route
   failures to quarantine with a specific reason.
 - Check the event `id` against the idempotency store before writing a Raw Record; a duplicate is
