@@ -15,7 +15,8 @@ No pipeline needed for this — it's two plain requests against the live API.
 **Steps:**
 1. `curl -sD- https://api.github.com/events -o /tmp/gh-events-1.json`
    The `-D-` flag prints response headers to stdout; redirect the body to a file so you can
-   inspect both separately.
+   inspect both separately.  The `-o /tmp/gh-events-1.json`: Writes the response body to `/tmp/gh-events-1.json`.
+   Result: HTTP response headers appear in the terminal, while the JSON event payload is saved to `/tmp/gh-events-1.json`.
 2. Note from the headers: `X-Poll-Interval` (the interval GitHub expects you to honour — likely
    60, in seconds), `X-RateLimit-Remaining`, and `ETag`.
 3. Count the events actually returned: `jq 'length' /tmp/gh-events-1.json` (or, without `jq`,
@@ -38,8 +39,32 @@ under normal operation, not just during outages — worth reading `research.md`'
 options at that point (narrower scope, faster polling within rate-limit headroom, or documenting
 the loss as a known, accepted limitation rather than letting SC-001 overpromise).
 
-**Result:** _(fill in once run)_ New ids per poll interval, sampled at different times of day:
-`___`. Conclusion: `___`.
+**Result:** New events returned per poll: **30**.
+
+Conclusion:
+
+- **Poll interval behaviour:** the `X-Poll-Interval` header returned a value of **60 seconds**.
+  Polling again before that interval has elapsed returns the **same JSON body** — i.e. the
+  identical set of events — rather than fresh data.
+- **Rate limit behaviour:** `x-ratelimit-limit` was **60**, meaning the API allows a maximum of
+  60 requests per rate-limit window. `x-ratelimit-reset` is set to exactly **one hour after the
+  first request of that window** (i.e. the first request that started the current 60-request
+  allowance).
+- **The two are independent, and that has a real cost:** the rate limit is consumed by every
+  request sent, regardless of whether it falls inside or outside the 60-second poll interval.
+  The API does **not** deduplicate or reject early requests — it simply returns the same (stale)
+  event set and still counts the request against the quota. The server enforces no minimum
+  spacing itself; honouring the 60-second interval is entirely the caller's responsibility, and
+  failing to do so both wastes a request and yields no new data.
+- **Practical ceiling:** if every request were spaced at exactly 60 seconds, 60 requests would
+  fit within the hour before the limit resets. In practice, timing precision (clock drift,
+  network latency, scheduler jitter) makes hitting that exact cadence unreliable, so the
+  realistic, sustainable throughput is closer to **59 requests per hour**.
+
+With 30 new events per poll at roughly 59 achievable polls per hour, observed turnover is nowhere
+near the 300-event cap per poll, so the assumption in ADR-0002 holds against this sample. Note
+this is throughput, not a substitute for genuinely busy-period sampling — see the note in "What to
+look for" above about checking multiple times of day before treating this as final.
 
 ## 2. An ongoing detection mechanism (not just a one-off check)
 
