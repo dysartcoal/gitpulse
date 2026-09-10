@@ -110,18 +110,26 @@ specs/001-github-events-ingestion/
 ```text
 infra/
 ├── docker-compose.yml     # NiFi + Kafka (KRaft mode) local stack
+├── create_topics.py       # Idempotent Kafka topic creation (partition/replication as a deliberate choice)
 └── terraform/             # LocalStack-targeted Terraform, for IaC practice without cloud risk
 
 nifi/
 └── flow/                  # Exported NiFi flow definition (InvokeHTTP -> routing -> Kafka publish)
 
+config/
+└── topic-map.properties   # Event type -> Kafka topic mapping; single source of truth for NiFi and the consumer
+
 src/
-├── schemas/                # JSON Schema definitions for the GitHub event envelope and per-type payloads
+├── schemas/                 # JSON Schema definitions for the GitHub event envelope and per-type payloads
 └── consumer/
-    ├── parsing.py           # Structural validation against src/schemas
+    ├── parsing.py            # Structural validation against src/schemas
     ├── idempotency.py        # De-duplication logic keyed on event id
-    ├── raw_writer.py          # Writes valid events to the local raw store
-    └── quarantine_writer.py   # Writes invalid events + reason to the local quarantine store
+    ├── raw_writer.py         # Writes valid events to the local raw store
+    ├── quarantine_writer.py  # Writes invalid events + reason to the local quarantine store
+    ├── topic_map.py          # Loads config/topic-map.properties for the routing cross-check
+    ├── config.py             # Consumer configuration: Kafka brokers, topic names, poll settings
+    ├── logging_config.py     # Structured logging setup
+    └── main.py               # Consumer entrypoint: wires parsing, idempotency, and the writers together
 
 tests/
 ├── unit/                   # parsing, idempotency, and writer unit tests (pytest)
@@ -135,7 +143,10 @@ data/                      # gitignored: local raw/ and quarantine/ stores writt
 **Structure Decision**: Single project layout (no frontend/backend split — this feature has no
 user-facing application). NiFi's flow configuration and the Docker Compose stack are kept
 separate from the Python consumer code so each can be iterated and tested independently, matching
-the constitution's per-layer testing principle.
+the constitution's per-layer testing principle. `config/topic-map.properties` is deliberately
+outside both `nifi/` and `src/consumer/` — it's read natively by both the NiFi flow and the
+consumer, so it belongs to neither and is the single source of truth for event-type-to-topic
+routing rather than two independently-maintained mappings.
 
 ## Complexity Tracking
 
