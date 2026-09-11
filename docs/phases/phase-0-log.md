@@ -1,7 +1,8 @@
 # Phase 0 log — Foundations
 
-**Status:** In progress — paused 2026-08-24 while Kim prepares for a Royal London interview (Thursday)
+**Status:** Complete — Phase 1 design reviewed, `tasks.md` generated and reviewed, ready to branch for implementation
 **Started:** 2026-08-21
+**Completed:** 2026-09-10
 
 ## Done
 
@@ -16,22 +17,26 @@
 - 2026-08-22 — Installed GitHub Spec Kit (`specify init --integration claude`), scaffolding `.claude/skills/speckit-*` and `.specify/`. Drafted and ratified the project constitution (v1.0.0, `.specify/memory/constitution.md`), deriving 5 core principles from the existing ADRs and README. Drafted and self-validated the Phase 1 spec (`specs/001-github-events-ingestion/spec.md`) — reliable ingestion of public activity events — against the spec quality checklist with no `[NEEDS CLARIFICATION]` markers needed, since existing ADRs already resolved the scope-significant questions.
 - 2026-08-23 — Confirmed the two AWS Budgets (`gitpulse-free-tier-credit`, `gitpulse-monthly`) and the `gitpulse-billing-alarm` CloudWatch alarm are all created in the AWS console; `docs/runbooks/aws-cost-guardrails.md` now records the actual configured values rather than placeholders.
 - 2026-08-23 — Ran `/speckit-plan` for Phase 1: filled in Technical Context (Python 3.12 consumer, local-filesystem raw/quarantine stores in Phase 1 — both resolved as research decisions grounded in existing ADRs rather than new ones), passed the Constitution Check with no violations, and produced `research.md`, `data-model.md`, three interface contracts (NiFi-to-Kafka-to-consumer, raw store, quarantine store), and `quickstart.md` under `specs/001-github-events-ingestion/`.
+- 2026-09-10 — Pushed the local commits sitting on `main` up to `origin/main`; reviewed the Phase 1 design artefacts (`plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`) and found four issues before running `/speckit-tasks`: idempotency de-duplication relied on an in-memory-only seen-set that wouldn't survive a restart (moved to a durable on-disk index, `research.md`); the "lower volume" assumption behind ADR-0002 had never actually been checked against GitHub's real API limits (added `docs/runbooks/github-events-volume-check.md` with an empirical check, an ongoing 300-event detection signal, and a review step); tests were deferred to a single late user story rather than written from the outset (fixed in `plan.md`'s Technical Context); and a confusing sentence in `contracts/kafka-topic-contract.md` was tightened.
+- 2026-09-10 — Ran the new volume-check runbook: 30 events returned per poll against the 300-event cap, `X-Poll-Interval` confirmed at 60s, and the rate limit confirmed at 60 requests/hour (realistically ~59 achievable in practice) — comfortably clear, so ADR-0002's volume assumption holds against this sample. Result recorded in the runbook.
+- 2026-09-10 — Created `exploration/` (`investigations/` and `scratch/` subfolders, each with a README explaining its purpose and how to extend it) as a gitignored home for ad hoc output like the volume-check captures, kept separate from the formal `tests/` suite. Updated `.gitignore` to match — and fixed a pre-existing gap where `data/` was documented in `plan.md` as gitignored but never actually was.
+- 2026-09-10 — Ran `/speckit-tasks`, producing `specs/001-github-events-ingestion/tasks.md` (33 tasks across Setup, Foundational, the three user stories, and Polish, per plan.md's Technical Context on tests-from-the-outset). Review of the generated file surfaced two further issues: `topic_map.py`'s routing logic wasn't actually reachable from NiFi's XML-configured flow, and the `GITHUB_TOKEN` PAT was wired into the wrong component (the consumer, which never calls GitHub's API) while never actually being sent anywhere. Fixed both: `config/topic-map.properties` is now a single source of truth read natively by NiFi (`PropertiesFileLookupService`/`LookupAttribute`) and the consumer, with a consumer-side routing cross-check added as a defensive catch if the two ever drift apart; the PAT header moved onto NiFi's `InvokeHTTP` call via an `EnvironmentVariableParameterProvider`; and an explicit Kafka topic-creation task was added rather than relying on auto-create defaults. `plan.md`'s Project Structure diagram updated to match. Committed to `main` and pushed.
+- 2026-09-11 — Confirmed Cost Anomaly Detection is tightened: edited the `Default-Services-Subscription` on the `Default-Services-Monitor` in the Billing console to a $15 alert threshold, down from AWS's $100/40% default. `docs/runbooks/aws-cost-guardrails.md` Part 4 now records this — the last of the three cost-guardrail controls to move from documented to actually confirmed.
 
 ## Next
 
-**Picking back up here after the Royal London interview:**
+**Phase 0 is done — Phase 1 implementation starts on a feature branch:**
 
-1. Review the Phase 1 design artefacts (`specs/001-github-events-ingestion/plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`) — not yet reviewed as of 2026-08-24.
-2. Push the local commits sitting on `main` up to `origin/main` (this environment can commit locally but can't push — do this via VS Code or Terminal).
-3. Run `/speckit-tasks` to turn the reviewed plan into a concrete Phase 1 task list.
+1. Create a feature branch from `main` (`001-github-events-ingestion`, matching the spec folder, is the natural name — though `/speckit-implement` resolves the feature via `.specify/feature.json`, not the branch name, so this is convention rather than a hard requirement).
+2. Run `/speckit-implement` to work through `tasks.md`'s 33 tasks.
 
-Other outstanding items, lower priority than the above:
+Other outstanding items, not blocking the above:
 
-- Check back on AWS Cost Explorer once it's populated (~24h after enabling) and tighten Cost Anomaly Detection from its $100/40% default down to ~$10-15 — also flagged in `00_PROJECT_PLAN.md`'s Phase 1 section as an easy-to-forget item.
-- Add branch protection on `main` once Phase 1's first CI check exists to require.
+- Add branch protection on `main` once Phase 1's first CI check (`T027`, `.github/workflows/ci.yml`) actually exists to require — not yet possible, since CI is still only a task, not implemented code.
 
 ## Decisions / notes
 
 - ADRs were written up in full now rather than deferred, since the reasoning already existed in the original planning document (`00_PROJECT_PLAN.md`, kept outside this repo in the personal job-search tracker) — no reason to retype it later from memory.
 - ADR-0007 is a good example of the plan changing on contact with a real constraint: the "more correct" security option (IAM Identity Center) had a cost consequence that outweighed its benefit at this stage, so a documented, deliberate compromise was made instead.
 - The runbook only reached its correct, working state through actually using it and hitting a real gap (the MFA-enforcement question) — worth remembering as a pattern: documentation written before first use is a draft, not a fact, until it's been run for real.
+- The `tasks.md` review caught two integration-level issues (the NiFi/Python mapping duplication, the misplaced PAT) that hadn't shown up in the `/speckit-plan` review a step earlier — the plan-level artefacts read as coherent, but only translating them into concrete, file-level tasks exposed where the design assumed an integration that didn't actually exist. Worth remembering for Phase 2 and beyond: each Spec Kit stage's extra granularity is a genuine review opportunity, not just a formality to pass through.

@@ -51,6 +51,8 @@ Budgets and the alarm tell you *that* spend is happening. Cost Explorer is where
 
 **One gap worth knowing about:** enabling Cost Explorer also turns on **Cost Anomaly Detection**, with a default monitor that only alerts once anomalous spend exceeds **both** $100 and 40% of expected spend. On a $100-total account, that default could trigger only once the entire credit is already at risk. Worth tightening: Billing console → **Cost Anomaly Detection** → edit the default monitor's alert threshold down to something like $10–15, rather than leaving AWS's default.
 
+**Configured:** Monitor: `Default-Services-Monitor`. Subscription: `Default-Services-Subscription`. Threshold: `$15`. Confirmed: `2026-09-11`.
+
 ## Where to look, day to day
 
 - **"Is anything about to breach budget?"** → Budgets page, both budgets above.
