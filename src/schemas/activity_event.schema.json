@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gitpulse.local/schemas/activity_event.schema.json",
+  "title": "Activity Event",
+  "description": "The GitHub public Events API event envelope (data-model.md). Validation rules: id, type, actor, repo, and created_at must be present and correctly typed. An unrecognized-but-well-formed type is not a validation failure - only the three known payload shapes below are checked.",
+  "type": "object",
+  "required": ["id", "type", "actor", "repo", "created_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique per event, stable across redelivery - the idempotency key (FR-002)."
+    },
+    "type": {
+      "type": "string",
+      "description": "The GitHub event type, e.g. PushEvent, IssuesEvent, PullRequestEvent."
+    },
+    "actor": {
+      "type": "object",
+      "required": ["id", "login"],
+      "properties": {
+        "id": { "type": "integer" },
+        "login": { "type": "string" },
+        "display_login": { "type": "string" },
+        "url": { "type": "string" },
+        "avatar_url": { "type": "string" }
+      }
+    },
+    "repo": {
+      "type": "object",
+      "required": ["id", "name", "url"],
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" },
+        "url": { "type": "string" }
+      }
+    },
+    "payload": {
+      "type": "object"
+    },
+    "public": {
+      "type": "boolean"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "PushEvent" } },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": { "payload": { "$ref": "payloads/push_event.schema.json" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "IssuesEvent" } },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": { "payload": { "$ref": "payloads/issues_event.schema.json" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "PullRequestEvent" } },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": { "payload": { "$ref": "payloads/pull_request_event.schema.json" } }
+      }
+    }
+  ]
+}
