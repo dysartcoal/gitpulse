@@ -24,16 +24,20 @@
 
   Flow summary (relationship in brackets, then the next step):
     InvokeHTTP [Response] => UpdateAttribute (capture ETag/rate-limit
-    headers, stateful) [success] => RouteOnAttribute (304 / rate
-    limited / ok) [unmatched=ok] => EvaluateJsonPath (count events)
-    [matched] => RouteOnAttribute (count == 300?) [at_ceiling] =>
-    UpdateAttribute (increment counter, stateful) [success] =>
-    LogAttribute (warn, running count) [success] => SplitJson (also
-    reached directly from the count check's [unmatched] path) [split]
-    => EvaluateJsonPath (event id, type) [matched] => LookupAttribute
-    (event type to topic, via PropertiesFileLookupService reading
-    config/topic-map.properties) [matched] => PublishKafka (key =
-    event id, topic = the resolved topic). LookupAttribute's
+    headers, stateful) [success] 
+    => RouteOnAttribute (304 / rate
+    limited / ok) [unmatched=ok] 
+    => EvaluateJsonPath (count events)
+    [matched] 
+    => RouteOnAttribute (count == 300?) [at_ceiling] 
+    => UpdateAttribute (increment counter, stateful) [success] 
+    => LogAttribute (warn, running count) [success] 
+    => SplitJson (also reached directly from the count check's 
+    [unmatched] path) [split]
+    => EvaluateJsonPath (event id, type) [matched] 
+    => LookupAttribute (event type to topic, via PropertiesFileLookupService reading
+    config/topic-map.properties) [matched] 
+    => PublishKafka (key = event id, topic = the resolved topic). LookupAttribute's
     [unmatched] path goes via UpdateAttribute (fallback topic) and
     LogAttribute (visibility) before rejoining PublishKafka.
 
