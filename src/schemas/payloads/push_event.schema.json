@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gitpulse.local/schemas/payloads/push_event.schema.json",
+  "title": "PushEvent payload",
+  "type": "object",
+  "required": ["push_id", "ref", "head", "before", "commits"],
+  "properties": {
+    "push_id": { "type": "integer" },
+    "ref": { "type": "string" },
+    "head": { "type": "string" },
+    "before": { "type": "string" },
+    "commits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sha", "message"],
+        "properties": {
+          "sha": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

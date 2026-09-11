@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gitpulse.local/schemas/payloads/pull_request_event.schema.json",
+  "title": "PullRequestEvent payload",
+  "type": "object",
+  "required": ["action", "number", "pull_request"],
+  "properties": {
+    "action": { "type": "string" },
+    "number": { "type": "integer" },
+    "pull_request": {
+      "type": "object",
+      "required": ["id", "number", "state", "title"],
+      "properties": {
+        "id": { "type": "integer" },
+        "number": { "type": "integer" },
+        "state": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    }
+  }
+}
