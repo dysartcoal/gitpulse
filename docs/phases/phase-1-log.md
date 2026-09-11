@@ -58,6 +58,16 @@
   the file's own header comment and in `tasks.md`'s T009 line, listing what to check (Parameter
   Context setup for `GITHUB_TOKEN`, `PublishKafka`'s exact bundled class name, the two stateful
   `UpdateAttribute` processors' Advanced-UI wiring).
+- 2026-09-11 — Added a "Code comments — self-documenting code" section to `CLAUDE.md` at Kim's
+  request: every function, class, and non-trivial block gets a comment on its expected outcome or
+  the reason a particular approach was taken (not what the code already says), extended to tests
+  too — the explicit goal being fewer back-and-forth questions while getting familiar with
+  generated code. Retrofitted T001-T011 to the new standard rather than leaving it to apply only
+  going forward: `pyproject.toml`, `docker-compose.yml`, all four JSON Schemas, `topic-map.properties`,
+  `topic_map.py`/`config.py`/`logging_config.py`, `create_topics.py`, and the NiFi flow's few
+  previously-uncommented processors all now explain their reasoning, not just their mechanics.
+  Re-verified everything still behaves identically after the pass (same JSON Schema validation
+  outcomes, XML/TOML still valid, ruff clean, modules still run under Python 3.12).
 
 ## Next
 
