@@ -180,6 +180,7 @@
         <entry><key>Destination</key><value>flowfile-attribute</value></entry>
         <entry><key>event.count</key><value>$.length()</value></entry>
       </properties>
+      <comment>Counted before SplitJson runs, on the still-whole response array - the 300-event ceiling check downstream needs the original page size, which is lost once the array is split into one flowfile per event.</comment>
     </processors>
 
     <processors>
@@ -259,6 +260,7 @@
         <entry><key>event.id</key><value>$.id</value></entry>
         <entry><key>event.type</key><value>$.type</value></entry>
       </properties>
+      <comment>event.id becomes PublishKafka's message key (kafka-topic-contract.md: same event redelivered lands on the same partition); event.type drives the topic lookup next.</comment>
     </processors>
 
     <processors>
@@ -345,6 +347,7 @@
         <entry><key>Log Level</key><value>error</value></entry>
       </properties>
       <autoTerminatedRelationships>success</autoTerminatedRelationships>
+      <comment>Terminal dead-letter logging, not a retry loop back to PublishKafka - a publish failure here is a Kafka-side problem (broker down, topic misconfigured), not the transient GitHub-connection failure InvokeHTTP's RetryFlowFile handles, so it's surfaced for a human rather than retried automatically.</comment>
     </processors>
 
     <connections>

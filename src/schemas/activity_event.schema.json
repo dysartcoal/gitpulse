@@ -15,6 +15,7 @@
     },
     "actor": {
       "type": "object",
+      "description": "Only id/login are required - the minimum data-model.md asks for ('id, login, display name'). display_login and the URLs are real GitHub API fields but optional here since nothing in this pipeline depends on them.",
       "required": ["id", "login"],
       "properties": {
         "id": { "type": "integer" },
@@ -26,6 +27,7 @@
     },
     "repo": {
       "type": "object",
+      "description": "id/name/url required exactly as data-model.md specifies ('id, name, url') - no optional fields here since the real GitHub API doesn't send any others on this sub-object.",
       "required": ["id", "name", "url"],
       "properties": {
         "id": { "type": "integer" },
@@ -34,10 +36,12 @@
       }
     },
     "payload": {
-      "type": "object"
+      "type": "object",
+      "description": "No shape required at this level - the three known event types get a conditional shape check below (allOf/if-then); any other type is only required to be an object, so a genuinely unrecognized-but-well-formed type still passes (data-model.md's rule, FR-003/SC-002)."
     },
     "public": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "Deliberately not in the top-level `required` list even though data-model.md's field table lists it - the validation-rules paragraph (what's actually enforced) only requires id/type/actor/repo/created_at."
     },
     "created_at": {
       "type": "string",
@@ -46,6 +50,7 @@
   },
   "allOf": [
     {
+      "description": "if/then per known type, not a top-level 'oneOf payload shape', so an event whose type isn't one of these three simply skips payload-shape checking instead of failing to match any branch.",
       "if": {
         "properties": { "type": { "const": "PushEvent" } },
         "required": ["type"]

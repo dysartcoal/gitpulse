@@ -43,6 +43,33 @@ Every decision in this repo is expected to trace back to the project constitutio
 **Any AI-facing or external-facing interface reads from the gold layer only** (ADR-0001) — this
 constraint applies regardless of which phase or feature is being touched.
 
+## Code comments — self-documenting code
+
+Every function, class, and non-trivial block of logic carries a comment stating its expected
+outcome or the reason a particular approach was taken — not a restatement of what the code
+literally does. The bar: reading this repository alone should answer "why is it built this way,"
+without needing to ask. This is a deliberate project convention, not the terser "comment only the
+non-obvious" default — apply it everywhere in this repo, including infrastructure config (NiFi
+flows, Docker Compose, CI) as well as application code.
+
+- Above a function or class, say what it's expected to produce or guarantee once it runs, not a
+  restatement of its name (`# increment i` earns nothing; `# durable idempotency index - survives
+  a consumer restart, unlike an in-memory-only set` does).
+- Where a specific choice was made over an obvious alternative (a data structure, a library call, a
+  workaround, a config value), say why at that point in the code — even if the reasoning already
+  lives in an ADR or research.md. A reader mid-file shouldn't have to leave the file to find out why.
+- A comment is doing its job when removing it would leave a reader unsure *why* the code is shaped
+  this way — not merely unsure *what* it does next. If removing a comment loses nothing, it wasn't
+  needed.
+- This applies retroactively when you're touching a file for another reason, not just to new code —
+  if you're already in there, bring it up to this standard.
+- Tests get the same treatment: a comment above each test (or test case) states what behavior or
+  scenario is being verified and why it matters — which requirement, edge case, or past bug it
+  guards against — not a restatement of the assertion itself. Someone unfamiliar with the code
+  should be able to read a test and understand what would have to break for it to fail, without
+  cross-referencing spec.md to find out why the test exists.
+
+  
 ## Spec Kit workflow
 
 This project uses [GitHub Spec Kit](https://github.com/github/spec-kit) to specify each phase

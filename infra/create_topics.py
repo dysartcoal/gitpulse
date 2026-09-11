@@ -27,9 +27,18 @@ from consumer.topic_map import TopicMap  # noqa: E402
 
 
 def create_topics(bootstrap_servers: str) -> None:
+    """Create every topic TopicMap knows about (T007), including the fallback.
+
+    Uses TopicMap rather than a separate hardcoded topic list, so this
+    script can't quietly drift out of sync with config/topic-map.properties.
+    """
     admin = AdminClient({"bootstrap.servers": bootstrap_servers})
     topics = sorted(TopicMap().topics)
 
+    # 1 partition / replication factor 1 everywhere: matches the single-broker
+    # setup (ADR-0005) - asking for more replicas than there are brokers would
+    # fail outright, and there's only one consumer instance in Phase 1, so
+    # multiple partitions would buy nothing but ordering complexity.
     new_topics = [NewTopic(name, num_partitions=1, replication_factor=1) for name in topics]
     futures = admin.create_topics(new_topics)
 
@@ -38,6 +47,10 @@ def create_topics(bootstrap_servers: str) -> None:
             future.result()
             print(f"created topic: {topic}")
         except Exception as exc:  # confluent-kafka raises KafkaException
+            # Idempotency is the whole point of this script (T008): re-running
+            # it after a topic already exists must be a no-op, not a crash, so
+            # this specific error is swallowed while any other failure (e.g. a
+            # genuine config problem) still propagates.
             error = getattr(exc, "args", [None])[0]
             if error and error.code() == KafkaError.TOPIC_ALREADY_EXISTS:
                 print(f"topic already exists, skipping: {topic}")
