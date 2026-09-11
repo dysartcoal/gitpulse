@@ -1,0 +1,491 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  GitHub Events ingestion flow (T009).
+
+  IMPORTANT - this file is a hand-authored best-effort NiFi Template XML,
+  written without a running NiFi instance available in this session to
+  import it into and confirm it wires up correctly. Processor types,
+  bundle versions, and property names are written to match NiFi 1.27.0 as
+  accurately as I can, but this has NOT been empirically verified by an
+  actual import. Before relying on it:
+    1. Import via the NiFi UI (Upload Template, then drag it onto the
+       canvas) against the apache/nifi:1.27.0 container from
+       infra/docker-compose.yml.
+    2. Create a Parameter Context (e.g. "github-ingestion") with a
+       GITHUB_TOKEN parameter - sourced from the container's GITHUB_TOKEN
+       env var via NiFi's EnvironmentVariableParameterProvider, or set
+       manually - and assign it to the process group. Template XML's
+       parameter-context support is version-dependent, so this step is
+       deliberately left to be done by hand in the UI rather than
+       encoded here.
+    3. Walk each processor's configuration against the inline
+       description below and adjust anything NiFi's import fills in
+       differently than intended.
+
+  Flow summary (relationship in brackets, then the next step):
+    InvokeHTTP [Response] => UpdateAttribute (capture ETag/rate-limit
+    headers, stateful) [success] => RouteOnAttribute (304 / rate
+    limited / ok) [unmatched=ok] => EvaluateJsonPath (count events)
+    [matched] => RouteOnAttribute (count == 300?) [at_ceiling] =>
+    UpdateAttribute (increment counter, stateful) [success] =>
+    LogAttribute (warn, running count) [success] => SplitJson (also
+    reached directly from the count check's [unmatched] path) [split]
+    => EvaluateJsonPath (event id, type) [matched] => LookupAttribute
+    (event type to topic, via PropertiesFileLookupService reading
+    config/topic-map.properties) [matched] => PublishKafka (key =
+    event id, topic = the resolved topic). LookupAttribute's
+    [unmatched] path goes via UpdateAttribute (fallback topic) and
+    LogAttribute (visibility) before rejoining PublishKafka.
+
+    InvokeHTTP's Retry/Failure relationships route to RetryFlowFile
+    (bounded, penalized re-queue back to InvokeHTTP) so a temporary
+    connection failure to GitHub is retried automatically (FR-005),
+    distinct from the rate-limit backoff path above.
+-->
+<template encoding-version="1.4">
+  <description>Polls the GitHub public Events API and publishes each event, keyed by its id, to the Kafka topic resolved from config/topic-map.properties.</description>
+  <groupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</groupId>
+  <name>GitHub Events Ingestion</name>
+  <snippet>
+    <processGroups>
+      <id>6D70ECE5-9944-4C1C-85E8-845336AF00A8</id>
+      <name>GitHub Events Ingestion</name>
+    </processGroups>
+
+    <controllerServices>
+      <id>ECE76E61-9337-4036-A0D3-D3BDD636DB97</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>topic-map-lookup</name>
+      <type>org.apache.nifi.lookup.PropertiesFileLookupService</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-lookup-services-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry>
+          <key>Configuration File</key>
+          <value>/opt/nifi/topic-map/topic-map.properties</value>
+        </entry>
+      </properties>
+      <comment>Mounted read-only from config/topic-map.properties (T007) - the same file the consumer's topic_map.py reads, so both sides route from one source of truth.</comment>
+    </controllerServices>
+
+    <processors>
+      <id>A5B009EB-8FED-444D-B014-673E8DD99668</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Poll GitHub Events API</name>
+      <type>org.apache.nifi.processors.standard.InvokeHTTP</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>HTTP Method</key><value>GET</value></entry>
+        <entry><key>Remote URL</key><value>https://api.github.com/events</value></entry>
+        <entry><key>Always Output Response</key><value>true</value></entry>
+        <entry><key>Add Response Headers to Request</key><value>false</value></entry>
+        <entry><key>Request Header If-None-Match</key><value>${previous.etag}</value></entry>
+        <entry><key>Request Header Authorization</key><value>token #{GITHUB_TOKEN}</value></entry>
+      </properties>
+      <schedulingPeriod>60 sec</schedulingPeriod>
+      <schedulingStrategy>TIMER_DRIVEN</schedulingStrategy>
+      <comment>60s default matches GitHub's X-Poll-Interval; re-tune if a poll response's own X-Poll-Interval header (captured below) says otherwise. If-None-Match/Authorization are only sent when the referenced attribute/parameter is non-empty.</comment>
+      <autoTerminatedRelationships>No Retry</autoTerminatedRelationships>
+    </processors>
+
+    <processors>
+      <id>71F0784B-977C-4D2A-8B52-3BB0659859B9</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Track ETag and rate-limit headers</name>
+      <type>org.apache.nifi.processors.attributes.UpdateAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-update-attribute-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>http.status</key><value>${invokehttp.status.code}</value></entry>
+        <entry><key>ratelimit.remaining</key><value>${invokehttp.response.header.X-RateLimit-Remaining}</value></entry>
+        <entry><key>poll.interval.hint</key><value>${invokehttp.response.header.X-Poll-Interval}</value></entry>
+      </properties>
+      <comment>Stateful Usage (configure via the Advanced UI after import): store ${invokehttp.response.header.ETag} as processor state key "previous.etag", read back as the ${previous.etag} attribute InvokeHTTP's If-None-Match header references above - this is what makes ETag caching survive across scheduled runs.</comment>
+    </processors>
+
+    <processors>
+      <id>B1B9F38C-F8EB-4980-8A9A-718EFC072700</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Retry on connection failure</name>
+      <type>org.apache.nifi.processors.standard.RetryFlowFile</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>Maximum Retries</key><value>10</value></entry>
+        <entry><key>Penalize Retries</key><value>true</value></entry>
+        <entry><key>Retry Attribute</key><value>invokehttp.retry.count</value></entry>
+      </properties>
+      <comment>FR-005: retries InvokeHTTP's Failure/Retry relationships (connection errors, non-2xx) with penalized backoff, distinct from the rate-limit path below. retries_exceeded routes to the shared operational-warning log rather than looping forever.</comment>
+    </processors>
+
+    <processors>
+      <id>B6BD148E-FBEE-45CC-9FF7-BA81A353D0A8</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Route on HTTP status and rate limit</name>
+      <type>org.apache.nifi.processors.standard.RouteOnAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>not_modified</key><value>${http.status:equals('304')}</value></entry>
+        <entry><key>rate_limited</key><value>${ratelimit.remaining:le(0)}</value></entry>
+      </properties>
+      <autoTerminatedRelationships>not_modified</autoTerminatedRelationships>
+      <comment>not_modified (304, ETag hit) is a normal no-op - the next scheduled poll will check again, no rate-limit budget spent. Everything else falls through "unmatched" to the event-counting step.</comment>
+    </processors>
+
+    <processors>
+      <id>F10054E9-78FC-4AFE-9F3B-4F4E1062BF94</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Log operational warning</name>
+      <type>org.apache.nifi.processors.standard.LogAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>Log Level</key><value>warn</value></entry>
+      </properties>
+      <autoTerminatedRelationships>success</autoTerminatedRelationships>
+      <comment>Shared sink for: rate-limit-exhausted polls, and RetryFlowFile's retries_exceeded. Visible in NiFi's bulletin board / app log, not silently dropped.</comment>
+    </processors>
+
+    <processors>
+      <id>5103B4D4-657C-4D59-9DC7-5EC6A73DE504</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Count events in response</name>
+      <type>org.apache.nifi.processors.standard.EvaluateJsonPath</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>Destination</key><value>flowfile-attribute</value></entry>
+        <entry><key>event.count</key><value>$.length()</value></entry>
+      </properties>
+    </processors>
+
+    <processors>
+      <id>2F4B17BA-04E0-4849-8077-562BE8178800</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Check 300-event ceiling</name>
+      <type>org.apache.nifi.processors.standard.RouteOnAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>at_ceiling</key><value>${event.count:equals(300)}</value></entry>
+      </properties>
+      <comment>research.md: a poll returning exactly 300 events (the API's documented maximum) is a cheap, reliable signal the 30-day/300-event window may already have truncated real data. "unmatched" (below 300) goes straight to splitting.</comment>
+    </processors>
+
+    <processors>
+      <id>C827D788-1482-4625-9A85-FF1D4FEE9C0D</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Increment 300-event counter</name>
+      <type>org.apache.nifi.processors.attributes.UpdateAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-update-attribute-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <comment>Stateful Usage (configure after import): increment processor state "poll.max.window.count" by 1 each time a flowfile reaches here, expose it as the ${poll.max.window.count} attribute the log message below reports - the "running count" research.md asks for.</comment>
+    </processors>
+
+    <processors>
+      <id>0A6B3C23-7FAC-48AB-BA69-0FA08227045A</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Log possible window truncation</name>
+      <type>org.apache.nifi.processors.standard.LogAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>Log Level</key><value>warn</value></entry>
+        <entry><key>Attributes to Log</key><value>event.count,poll.max.window.count</value></entry>
+      </properties>
+      <comment>Logs and continues - this poll's events still get split and published below, nothing is dropped on this signal alone.</comment>
+    </processors>
+
+    <processors>
+      <id>196BD12E-204E-490A-96AB-96DFCA20ED6F</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Split events array</name>
+      <type>org.apache.nifi.processors.standard.SplitJson</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>JsonPath Expression</key><value>$.*</value></entry>
+      </properties>
+      <comment>One flowfile per array element - kafka-topic-contract.md's "NiFi does not transform or reshape the event before publishing" applies from here on: each split flowfile's content stays the untouched, single-event JSON object.</comment>
+    </processors>
+
+    <processors>
+      <id>3BFAA78A-C4E9-4BFC-8BB9-233E6153519A</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Extract event id and type</name>
+      <type>org.apache.nifi.processors.standard.EvaluateJsonPath</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>Destination</key><value>flowfile-attribute</value></entry>
+        <entry><key>event.id</key><value>$.id</value></entry>
+        <entry><key>event.type</key><value>$.type</value></entry>
+      </properties>
+    </processors>
+
+    <processors>
+      <id>AEB99FE7-7097-4145-9B53-88605EAD1EC2</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Resolve Kafka topic</name>
+      <type>org.apache.nifi.processors.standard.LookupAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>Lookup Service</key><value>ECE76E61-9337-4036-A0D3-D3BDD636DB97</value></entry>
+        <entry><key>kafka.topic</key><value>${event.type}</value></entry>
+      </properties>
+      <comment>matched -> straight to PublishKafka with kafka.topic set. unmatched (a GitHub event type not yet in config/topic-map.properties) routes to the fallback step below rather than being silently dropped.</comment>
+    </processors>
+
+    <processors>
+      <id>0345C703-E4C9-4462-9CAF-8D19BD693DFA</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Fallback topic for unmatched type</name>
+      <type>org.apache.nifi.processors.attributes.UpdateAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-update-attribute-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>kafka.topic</key><value>github-events.other-activity</value></entry>
+      </properties>
+      <comment>Must match the "default" value in config/topic-map.properties (T007) - PropertiesFileLookupService has no native fallback, so this value is kept in sync by hand. If T007's default ever changes, update this property too.</comment>
+    </processors>
+
+    <processors>
+      <id>F51463F5-3877-40FE-B713-B64E55D1689F</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Log unmatched event type</name>
+      <type>org.apache.nifi.processors.standard.LogAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>Log Level</key><value>warn</value></entry>
+        <entry><key>Attributes to Log</key><value>event.type</value></entry>
+      </properties>
+      <comment>Visibility so a genuinely new GitHub event type gets noticed and added to config/topic-map.properties, rather than quietly living in the fallback topic indefinitely.</comment>
+    </processors>
+
+    <processors>
+      <id>3BFB67EC-9B3A-48BB-975A-4AA1A25E48B4</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Publish to Kafka</name>
+      <type>org.apache.nifi.processors.kafka.pubsub.PublishKafka_2_6</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-kafka-2-6-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>bootstrap.servers</key><value>kafka:9092</value></entry>
+        <entry><key>Topic Name</key><value>${kafka.topic}</value></entry>
+        <entry><key>Kafka Key</key><value>${event.id}</value></entry>
+        <entry><key>Delivery Guarantee</key><value>1</value></entry>
+      </properties>
+      <autoTerminatedRelationships>success</autoTerminatedRelationships>
+      <comment>Message key = event.id per kafka-topic-contract.md, so same-event redelivery lands on the same partition. Check this processor's exact class/bundle name against whatever Kafka client version NiFi 1.27.0 actually bundles - PublishKafka's versioned class name has changed across NiFi releases.</comment>
+    </processors>
+
+    <processors>
+      <id>395796B5-614F-4A19-877B-B70A11AA447B</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <name>Log Kafka publish failure</name>
+      <type>org.apache.nifi.processors.standard.LogAttribute</type>
+      <bundle>
+        <group>org.apache.nifi</group>
+        <artifact>nifi-standard-nar</artifact>
+        <version>1.27.0</version>
+      </bundle>
+      <properties>
+        <entry><key>Log Level</key><value>error</value></entry>
+      </properties>
+      <autoTerminatedRelationships>success</autoTerminatedRelationships>
+    </processors>
+
+    <connections>
+      <id>6B1022A6-A1CD-4C0F-A354-E12AEF19216A</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>A5B009EB-8FED-444D-B014-673E8DD99668</id></source>
+      <destination><id>71F0784B-977C-4D2A-8B52-3BB0659859B9</id></destination>
+      <selectedRelationships>Response</selectedRelationships>
+    </connections>
+    <connections>
+      <id>74145559-6540-4008-B859-4DE92F2E0627</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>A5B009EB-8FED-444D-B014-673E8DD99668</id></source>
+      <destination><id>B1B9F38C-F8EB-4980-8A9A-718EFC072700</id></destination>
+      <selectedRelationships>Retry</selectedRelationships>
+    </connections>
+    <connections>
+      <id>DECE7F02-8A09-4885-B668-EC850FCCF5C6</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>A5B009EB-8FED-444D-B014-673E8DD99668</id></source>
+      <destination><id>B1B9F38C-F8EB-4980-8A9A-718EFC072700</id></destination>
+      <selectedRelationships>Failure</selectedRelationships>
+    </connections>
+    <connections>
+      <id>11E96524-797B-4C68-9FF3-2998A4F4D9D8</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>B1B9F38C-F8EB-4980-8A9A-718EFC072700</id></source>
+      <destination><id>A5B009EB-8FED-444D-B014-673E8DD99668</id></destination>
+      <selectedRelationships>retry</selectedRelationships>
+    </connections>
+    <connections>
+      <id>D59C5825-B30F-4FAD-ADF0-2D59841E41CA</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>B1B9F38C-F8EB-4980-8A9A-718EFC072700</id></source>
+      <destination><id>F10054E9-78FC-4AFE-9F3B-4F4E1062BF94</id></destination>
+      <selectedRelationships>retries_exceeded</selectedRelationships>
+    </connections>
+    <connections>
+      <id>6FE189CB-B67D-42BA-8E3A-C24C444EED14</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>B6BD148E-FBEE-45CC-9FF7-BA81A353D0A8</id></source>
+      <destination><id>F10054E9-78FC-4AFE-9F3B-4F4E1062BF94</id></destination>
+      <selectedRelationships>rate_limited</selectedRelationships>
+    </connections>
+    <connections>
+      <id>069786A8-3476-4AFF-865D-7C4EA306660C</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>71F0784B-977C-4D2A-8B52-3BB0659859B9</id></source>
+      <destination><id>B6BD148E-FBEE-45CC-9FF7-BA81A353D0A8</id></destination>
+      <selectedRelationships>success</selectedRelationships>
+    </connections>
+    <connections>
+      <id>6C789C9C-A80F-4FC0-8AB2-E29B961C37B9</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>B6BD148E-FBEE-45CC-9FF7-BA81A353D0A8</id></source>
+      <destination><id>5103B4D4-657C-4D59-9DC7-5EC6A73DE504</id></destination>
+      <selectedRelationships>unmatched</selectedRelationships>
+    </connections>
+    <connections>
+      <id>C03E83CC-ED46-4B8C-993A-F2A70CC86942</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>5103B4D4-657C-4D59-9DC7-5EC6A73DE504</id></source>
+      <destination><id>2F4B17BA-04E0-4849-8077-562BE8178800</id></destination>
+      <selectedRelationships>matched</selectedRelationships>
+    </connections>
+    <connections>
+      <id>6757AC04-A0BF-478F-A98F-6A6E89E511BF</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>2F4B17BA-04E0-4849-8077-562BE8178800</id></source>
+      <destination><id>C827D788-1482-4625-9A85-FF1D4FEE9C0D</id></destination>
+      <selectedRelationships>at_ceiling</selectedRelationships>
+    </connections>
+    <connections>
+      <id>D15A8A3F-FBE4-4A8D-B6DE-2B143664A551</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>2F4B17BA-04E0-4849-8077-562BE8178800</id></source>
+      <destination><id>196BD12E-204E-490A-96AB-96DFCA20ED6F</id></destination>
+      <selectedRelationships>unmatched</selectedRelationships>
+    </connections>
+    <connections>
+      <id>05AA5A10-D825-4CA6-AE97-EBEA1C1779D9</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>C827D788-1482-4625-9A85-FF1D4FEE9C0D</id></source>
+      <destination><id>0A6B3C23-7FAC-48AB-BA69-0FA08227045A</id></destination>
+      <selectedRelationships>success</selectedRelationships>
+    </connections>
+    <connections>
+      <id>E2129CDE-B3A7-4896-BF19-5BDE5F67F919</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>0A6B3C23-7FAC-48AB-BA69-0FA08227045A</id></source>
+      <destination><id>196BD12E-204E-490A-96AB-96DFCA20ED6F</id></destination>
+      <selectedRelationships>success</selectedRelationships>
+    </connections>
+    <connections>
+      <id>EAD92B63-9D64-40A8-A69F-3D97915B76BA</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>196BD12E-204E-490A-96AB-96DFCA20ED6F</id></source>
+      <destination><id>3BFAA78A-C4E9-4BFC-8BB9-233E6153519A</id></destination>
+      <selectedRelationships>split</selectedRelationships>
+    </connections>
+    <connections>
+      <id>C210AE3A-770A-4C16-AE19-46E4CA5244D2</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>3BFAA78A-C4E9-4BFC-8BB9-233E6153519A</id></source>
+      <destination><id>AEB99FE7-7097-4145-9B53-88605EAD1EC2</id></destination>
+      <selectedRelationships>matched</selectedRelationships>
+    </connections>
+    <connections>
+      <id>D2E33717-9F3B-4C17-A67D-5B1173C804C2</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>AEB99FE7-7097-4145-9B53-88605EAD1EC2</id></source>
+      <destination><id>3BFB67EC-9B3A-48BB-975A-4AA1A25E48B4</id></destination>
+      <selectedRelationships>matched</selectedRelationships>
+    </connections>
+    <connections>
+      <id>EACD329C-5AB6-437C-AA8F-076EF26FA4F4</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>AEB99FE7-7097-4145-9B53-88605EAD1EC2</id></source>
+      <destination><id>0345C703-E4C9-4462-9CAF-8D19BD693DFA</id></destination>
+      <selectedRelationships>unmatched</selectedRelationships>
+    </connections>
+    <connections>
+      <id>9EE8C59C-9082-4FFE-9246-A65242DBEEDE</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>0345C703-E4C9-4462-9CAF-8D19BD693DFA</id></source>
+      <destination><id>F51463F5-3877-40FE-B713-B64E55D1689F</id></destination>
+      <selectedRelationships>success</selectedRelationships>
+    </connections>
+    <connections>
+      <id>3BFB67EC-9B3A-48BB-975A-4AA1A25E48B5</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>F51463F5-3877-40FE-B713-B64E55D1689F</id></source>
+      <destination><id>3BFB67EC-9B3A-48BB-975A-4AA1A25E48B4</id></destination>
+      <selectedRelationships>success</selectedRelationships>
+    </connections>
+    <connections>
+      <id>395796B5-614F-4A19-877B-B70A11AA447C</id>
+      <parentGroupId>6D70ECE5-9944-4C1C-85E8-845336AF00A8</parentGroupId>
+      <source><id>3BFB67EC-9B3A-48BB-975A-4AA1A25E48B4</id></source>
+      <destination><id>395796B5-614F-4A19-877B-B70A11AA447B</id></destination>
+      <selectedRelationships>failure</selectedRelationships>
+    </connections>
+  </snippet>
+</template>
