@@ -1,6 +1,5 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://gitpulse.local/schemas/payloads/issues_event.schema.json",
   "title": "IssuesEvent payload",
   "type": "object",
   "required": ["action", "issue"],

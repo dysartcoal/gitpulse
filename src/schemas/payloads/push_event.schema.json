@@ -1,6 +1,5 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://gitpulse.local/schemas/payloads/push_event.schema.json",
   "title": "PushEvent payload",
   "type": "object",
   "required": ["push_id", "ref", "head", "before", "commits"],

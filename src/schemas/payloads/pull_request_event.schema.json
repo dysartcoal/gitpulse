@@ -1,6 +1,5 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://gitpulse.local/schemas/payloads/pull_request_event.schema.json",
   "title": "PullRequestEvent payload",
   "type": "object",
   "required": ["action", "number", "pull_request"],

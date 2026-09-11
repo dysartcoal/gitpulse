@@ -1,6 +1,5 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://gitpulse.local/schemas/activity_event.schema.json",
   "title": "Activity Event",
   "description": "The GitHub public Events API event envelope (data-model.md). Validation rules: id, type, actor, repo, and created_at must be present and correctly typed. An unrecognized-but-well-formed type is not a validation failure - only the three known payload shapes below are checked.",
   "type": "object",

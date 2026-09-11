@@ -38,7 +38,8 @@ def create_topics(bootstrap_servers: str) -> None:
             future.result()
             print(f"created topic: {topic}")
         except Exception as exc:  # confluent-kafka raises KafkaException
-            if getattr(exc, "args", [None])[0] and exc.args[0].code() == KafkaError.TOPIC_ALREADY_EXISTS:
+            error = getattr(exc, "args", [None])[0]
+            if error and error.code() == KafkaError.TOPIC_ALREADY_EXISTS:
                 print(f"topic already exists, skipping: {topic}")
             else:
                 raise
