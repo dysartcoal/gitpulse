@@ -43,7 +43,7 @@ Orchestration, deployment and governance layers not shown above: Terraform for i
 
 | Phase | Focus | Status |
 |---|---|---|
-| 0 | Foundations — repo, budget guardrails, Spec Kit spec for Phase 1 | In progress |
+| 0 | Foundations — repo, budget guardrails, Spec Kit spec for Phase 1 | Done |
 | 1 | Local streaming pipeline — NiFi → Kafka → raw, tested from day one | Not started |
 | 2 | Real medallion architecture — Iceberg, Spark, dbt, data quality | Not started |
 | 3 | APIs and the AI boundary — FastAPI, gold-only AI access | Not started |
