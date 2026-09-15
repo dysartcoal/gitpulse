@@ -70,6 +70,9 @@ services:
       kafka:
         condition: service_healthy
     ports:
+      # Configure port forwarding from port 8443 on the localhost on the platform external 
+      # to the docker environment (e.g. the Mac locahlost) to
+      # port 8443 on the docker managed URL for nifi
       - "8443:8443"
     environment:
       SINGLE_USER_CREDENTIALS_USERNAME: admin
@@ -80,6 +83,7 @@ services:
       # Passed through so the flow's Parameter Context (T009) can read it via
       # NiFi's EnvironmentVariableParameterProvider. Empty is fine - unauthenticated.
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      NIFI_WEB_HTTPS_HOST: 0.0.0.0
     volumes:
       # Named volumes so the imported flow definition and any in-flight
       # flowfile state survive a container restart - without these, every
