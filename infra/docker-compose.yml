@@ -23,12 +23,21 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      # Only "localhost" resolves correctly for both the host (NiFi/consumer
-      # scripts run on the dev laptop) and containers on this same compose
-      # network reaching it by service name via Docker's DNS - fine for a
-      # single-node local stack, would need per-listener advertising for a
-      # real multi-host deployment.
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      # The Docker Compose *service* name, not "localhost" - confirmed wrong
+      # 2026-09-18 when NiFi (a different container) became the first real
+      # container-to-container Kafka client this project built: a broker
+      # advertises this address to clients for their follow-up connections,
+      # and "localhost" from inside gitpulse-nifi means gitpulse-nifi's own
+      # loopback, not Kafka's - every existing docker-exec-based command
+      # happened to still work despite this, since "localhost" genuinely
+      # does mean itself from *inside* the kafka container, masking the bug
+      # until a different container tried to connect. "kafka:9092" resolves
+      # correctly both for other containers (via Docker's DNS) and for the
+      # existing docker-exec commands (a container's own service name
+      # resolves to itself too) - see
+      # exploration/notes/2026-09-11-docker-compose-networking.md for the
+      # general service-name-vs-container-name lesson this is an instance of.
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       # This node is the sole voter in its own KRaft quorum - single-broker
@@ -59,7 +68,15 @@ services:
       start_period: 20s
 
   nifi:
-    image: apache/nifi:1.27.0
+    # 2.x, not 1.x: Snowflake's Openflow (a managed NiFi offering relevant to this project's
+    # job-market-driven skills goal) is built on NiFi 2.0, and 1.x's Template XML mechanism this
+    # project initially relied on is deprecated there and removed outright in 2.0 - verified via
+    # direct image inspection (2026-09-15) that NIFI_WEB_HTTPS_HOST/SINGLE_USER_CREDENTIALS_* env
+    # vars and every other processor this flow uses behave identically to 1.27.0; PublishKafka is
+    # the one real behaviour change, now requiring a separate Kafka Connection Service controller
+    # service rather than bootstrap.servers as a direct processor property - see
+    # exploration/scratch/2026-09-14-nifi-flow-build/build-guide.md.
+    image: apache/nifi:2.12.0
     container_name: gitpulse-nifi
     restart: unless-stopped
     depends_on:

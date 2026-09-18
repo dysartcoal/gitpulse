@@ -138,8 +138,18 @@ tests/integration/# testcontainers-backed real-Kafka test
 data/             # gitignored — local raw/ and quarantine/ stores written at runtime
 ```
 
+**Environment setup** (real, verified 2026-09-18 — `pyproject.toml` now exists and declares
+`requires-python = ">=3.12"`, but the machine's default `python3` is 3.11 via `pyenv`, so a venv
+must be created against 3.12 explicitly, not the bare `python3 -m venv`):
+```bash
+~/.pyenv/versions/3.12.7/bin/python3.12 -m venv .venv   # once, per machine
+.venv/bin/pip install -e .                              # or -e ".[test]" for pytest/testcontainers too
+.venv/bin/python infra/create_topics.py                 # example: now runnable
+```
+`.venv/` is gitignored — every contributor creates their own.
+
 **Testing approach once code exists**: `pytest` for unit tests, `testcontainers-python`'s Kafka
 module for integration tests against a real local broker (never a mock, per ADR-0006) — GitHub
-Actions runs lint, unit tests, and the integration test on every PR. There is no build/lint/test
-command to run yet; check `specs/001-github-events-ingestion/quickstart.md` and `tasks.md` once
-implementation begins, and update this file with the real commands at that point.
+Actions runs lint, unit tests, and the integration test on every PR. Check
+`specs/001-github-events-ingestion/quickstart.md` and `tasks.md` for the current state of what's
+actually implemented and testable — this file's own "Current state" note above may lag behind it.

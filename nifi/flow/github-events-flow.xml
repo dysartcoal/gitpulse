@@ -2,25 +2,29 @@
 <!--
   GitHub Events ingestion flow (T009).
 
-  IMPORTANT - this file is a hand-authored best-effort NiFi Template XML,
+  SUPERSEDED - this file is a hand-authored best-effort NiFi Template XML,
   written without a running NiFi instance available in this session to
-  import it into and confirm it wires up correctly. Processor types,
-  bundle versions, and property names are written to match NiFi 1.27.0 as
-  accurately as I can, but this has NOT been empirically verified by an
-  actual import. Before relying on it:
-    1. Import via the NiFi UI (Upload Template, then drag it onto the
-       canvas) against the apache/nifi:1.27.0 container from
-       infra/docker-compose.yml.
-    2. Create a Parameter Context (e.g. "github-ingestion") with a
-       GITHUB_TOKEN parameter - sourced from the container's GITHUB_TOKEN
-       env var via NiFi's EnvironmentVariableParameterProvider, or set
-       manually - and assign it to the process group. Template XML's
-       parameter-context support is version-dependent, so this step is
-       deliberately left to be done by hand in the UI rather than
-       encoded here.
-    3. Walk each processor's configuration against the inline
-       description below and adjust anything NiFi's import fills in
-       differently than intended.
+  import it into and confirm it wires up correctly. A later structural
+  comparison against a real NiFi export showed its <processors>/<connections>
+  schema is fundamentally wrong (not just missing fields), and the project
+  has since moved from NiFi 1.27.0 to 2.12.0 - whose UI removes the
+  Template mechanism this file's format targets entirely, so it can no
+  longer even be imported as written.
+
+  Do not attempt to import or hand-patch this file. Instead:
+    1. Build the flow directly on the NiFi 2.12.0 canvas, following
+       exploration/scratch/2026-09-14-nifi-flow-build/build-guide.md
+       (a processor-by-processor checklist derived from this file's
+       still-sound design content - types, property values, wiring,
+       the reasoning below - built for 2.12.0 specifically, including
+       the Kafka Connection Service controller service PublishKafka now
+       requires in place of a direct bootstrap.servers property).
+    2. Follow docs/runbooks/nifi-flow-import.md for the surrounding
+       steps (Parameter Context, controller services, verifying and
+       exporting).
+    3. Export the verified flow as nifi/flow/github-events-flow.json
+       (NiFi 2.x exports JSON only - no Template XML) and delete this
+       file once that lands.
 
   Flow summary (relationship in brackets, then the next step):
     InvokeHTTP [Response] => UpdateAttribute (capture ETag/rate-limit

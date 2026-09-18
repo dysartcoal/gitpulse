@@ -1,0 +1,2989 @@
+{
+    "flowContents": {
+        "identifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+        "instanceIdentifier": "a492cb1b-01a0-1000-33b2-ef002a3cb5fe",
+        "name": "GitHub Events Flow",
+        "comments": "",
+        "position": {
+            "x": 480,
+            "y": 208
+        },
+        "processGroups": [],
+        "remoteProcessGroups": [],
+        "processors": [
+            {
+                "identifier": "06806c97-1dbd-3876-b2e8-73ff5b87b7e0",
+                "instanceIdentifier": "b3e0cd40-01a0-1000-0e8f-a6499b45a319",
+                "name": "Resolve Kafka topic",
+                "comments": "matched -> straight to PublishKafka with kafka.topic set. unmatched (a GitHub event type not yet in config/topic-map.properties) routes to the fallback step below rather than being silently dropped",
+                "position": {
+                    "x": 320,
+                    "y": 1368
+                },
+                "type": "org.apache.nifi.processors.standard.LookupAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Lookup Service": "91a88bce-c5db-3702-83fc-c791ab1e9042",
+                    "kafka.topic": "${event.type}",
+                    "Include Empty Values": "true"
+                },
+                "propertyDescriptors": {
+                    "Lookup Service": {
+                        "name": "Lookup Service",
+                        "displayName": "Lookup Service",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "kafka.topic": {
+                        "name": "kafka.topic",
+                        "displayName": "kafka.topic",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Include Empty Values": {
+                        "name": "Include Empty Values",
+                        "displayName": "Include Empty Values",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 0,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "failure"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "d7e97b49-b8bc-3d1e-84b9-f1212d871864",
+                "instanceIdentifier": "b3c49456-01a0-1000-631c-5b8dfd6a1d02",
+                "name": "Route on HTTP status and rate limit",
+                "comments": "not_modified (304, ETag hit) is a normal no-op - the next scheduled poll will check again, no rate-limit budget spent. Everything else falls through unmatched to the event-counting step.",
+                "position": {
+                    "x": 304,
+                    "y": 216
+                },
+                "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "rate_limited": "${ratelimit.remaining:le(0)}",
+                    "Routing Strategy": "Route to Property name",
+                    "not_modified": "${http.status:equals('304')}"
+                },
+                "propertyDescriptors": {
+                    "rate_limited": {
+                        "name": "rate_limited",
+                        "displayName": "rate_limited",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Routing Strategy": {
+                        "name": "Routing Strategy",
+                        "displayName": "Routing Strategy",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "not_modified": {
+                        "name": "not_modified",
+                        "displayName": "not_modified",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "not_modified"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "4307f10b-245c-3627-aa9b-2117acfb7560",
+                "instanceIdentifier": "a4f5eccb-01a0-1000-3665-7341bd5aa6d2",
+                "name": "Poll GitHub Events API",
+                "comments": "60s default matches GitHub's X-Poll-Interval; re-tune if a poll response's own X-Poll-Interval header (captured below) says otherwise. If-None-Match/Authorization are only sent when the referenced attribute/parameter is non-empty.",
+                "position": {
+                    "x": 304,
+                    "y": -280
+                },
+                "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Request Content-Encoding": "DISABLED",
+                    "Request Multipart Form-Data Filename Enabled": "true",
+                    "Request Chunked Transfer-Encoding Enabled": "false",
+                    "Response Header Request Attributes Prefix": null,
+                    "Proxy Configuration Service": null,
+                    "HTTP/2 Disabled": "False",
+                    "Connection Timeout": "5 secs",
+                    "Response Cookie Strategy": "DISABLED",
+                    "Socket Read Timeout": "15 secs",
+                    "Socket Idle Connections": "5",
+                    "Request Body Enabled": "true",
+                    "OAuth2 Access Token Refresh Strategy": "ON_TOKEN_EXPIRATION",
+                    "HTTP URL": "https://api.github.com/events",
+                    "Request OAuth2 Access Token Provider": null,
+                    "Socket Idle Timeout": "5 mins",
+                    "Response Redirects Enabled": "True",
+                    "Socket Write Timeout": "15 secs",
+                    "Request Header Attributes Pattern": null,
+                    "Response FlowFile Naming Strategy": "RANDOM",
+                    "Response Cache Enabled": "false",
+                    "Request Date Header Enabled": "True",
+                    "If-None-Match": "${previous.etag}",
+                    "Request Failure Penalization Enabled": "false",
+                    "Response Body Attribute Size": "256",
+                    "SSL Context Service": null,
+                    "Response Generation Required": "true",
+                    "Request User-Agent": null,
+                    "Response Header Request Attributes Enabled": "false",
+                    "HTTP Method": "GET",
+                    "Request Username": null,
+                    "Request Content-Type": "${mime.type}",
+                    "Response Body Attribute Name": null,
+                    "Request Digest Authentication Enabled": "false",
+                    "Request Multipart Form-Data Name": null,
+                    "Response Cache Size": "10MB",
+                    "Response Body Ignored": "false"
+                },
+                "propertyDescriptors": {
+                    "Request Content-Encoding": {
+                        "name": "Request Content-Encoding",
+                        "displayName": "Request Content-Encoding",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Multipart Form-Data Filename Enabled": {
+                        "name": "Request Multipart Form-Data Filename Enabled",
+                        "displayName": "Request Multipart Form-Data Filename Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Chunked Transfer-Encoding Enabled": {
+                        "name": "Request Chunked Transfer-Encoding Enabled",
+                        "displayName": "Request Chunked Transfer-Encoding Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Header Request Attributes Prefix": {
+                        "name": "Response Header Request Attributes Prefix",
+                        "displayName": "Response Header Request Attributes Prefix",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Proxy Configuration Service": {
+                        "name": "Proxy Configuration Service",
+                        "displayName": "Proxy Configuration Service",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "HTTP/2 Disabled": {
+                        "name": "HTTP/2 Disabled",
+                        "displayName": "HTTP/2 Disabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Connection Timeout": {
+                        "name": "Connection Timeout",
+                        "displayName": "Connection Timeout",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Cookie Strategy": {
+                        "name": "Response Cookie Strategy",
+                        "displayName": "Response Cookie Strategy",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Password": {
+                        "name": "Request Password",
+                        "displayName": "Request Password",
+                        "identifiesControllerService": false,
+                        "sensitive": true,
+                        "dynamic": false
+                    },
+                    "Socket Read Timeout": {
+                        "name": "Socket Read Timeout",
+                        "displayName": "Socket Read Timeout",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Socket Idle Connections": {
+                        "name": "Socket Idle Connections",
+                        "displayName": "Socket Idle Connections",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Body Enabled": {
+                        "name": "Request Body Enabled",
+                        "displayName": "Request Body Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "OAuth2 Access Token Refresh Strategy": {
+                        "name": "OAuth2 Access Token Refresh Strategy",
+                        "displayName": "OAuth2 Access Token Refresh Strategy",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "HTTP URL": {
+                        "name": "HTTP URL",
+                        "displayName": "HTTP URL",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request OAuth2 Access Token Provider": {
+                        "name": "Request OAuth2 Access Token Provider",
+                        "displayName": "Request OAuth2 Access Token Provider",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Socket Idle Timeout": {
+                        "name": "Socket Idle Timeout",
+                        "displayName": "Socket Idle Timeout",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Redirects Enabled": {
+                        "name": "Response Redirects Enabled",
+                        "displayName": "Response Redirects Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Socket Write Timeout": {
+                        "name": "Socket Write Timeout",
+                        "displayName": "Socket Write Timeout",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Header Attributes Pattern": {
+                        "name": "Request Header Attributes Pattern",
+                        "displayName": "Request Header Attributes Pattern",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response FlowFile Naming Strategy": {
+                        "name": "Response FlowFile Naming Strategy",
+                        "displayName": "Response FlowFile Naming Strategy",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Cache Enabled": {
+                        "name": "Response Cache Enabled",
+                        "displayName": "Response Cache Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Date Header Enabled": {
+                        "name": "Request Date Header Enabled",
+                        "displayName": "Request Date Header Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "If-None-Match": {
+                        "name": "If-None-Match",
+                        "displayName": "If-None-Match",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Request Failure Penalization Enabled": {
+                        "name": "Request Failure Penalization Enabled",
+                        "displayName": "Request Failure Penalization Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Body Attribute Size": {
+                        "name": "Response Body Attribute Size",
+                        "displayName": "Response Body Attribute Size",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "SSL Context Service": {
+                        "name": "SSL Context Service",
+                        "displayName": "SSL Context Service",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Generation Required": {
+                        "name": "Response Generation Required",
+                        "displayName": "Response Generation Required",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request User-Agent": {
+                        "name": "Request User-Agent",
+                        "displayName": "Request User-Agent",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Header Request Attributes Enabled": {
+                        "name": "Response Header Request Attributes Enabled",
+                        "displayName": "Response Header Request Attributes Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "HTTP Method": {
+                        "name": "HTTP Method",
+                        "displayName": "HTTP Method",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Username": {
+                        "name": "Request Username",
+                        "displayName": "Request Username",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Content-Type": {
+                        "name": "Request Content-Type",
+                        "displayName": "Request Content-Type",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Body Attribute Name": {
+                        "name": "Response Body Attribute Name",
+                        "displayName": "Response Body Attribute Name",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Digest Authentication Enabled": {
+                        "name": "Request Digest Authentication Enabled",
+                        "displayName": "Request Digest Authentication Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Request Multipart Form-Data Name": {
+                        "name": "Request Multipart Form-Data Name",
+                        "displayName": "Request Multipart Form-Data Name",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Cache Size": {
+                        "name": "Response Cache Size",
+                        "displayName": "Response Cache Size",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Response Body Ignored": {
+                        "name": "Response Body Ignored",
+                        "displayName": "Response Body Ignored",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "60 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 0,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "No Retry",
+                    "Original"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "d5e014f0-96a7-372e-952d-9883ab729351",
+                "instanceIdentifier": "b3de710d-01a0-1000-e450-233440a53f6c",
+                "name": "Check 300-event ceiling",
+                "comments": "A poll returning exactly 300 events (the API's documented maximum) is a cheap, reliable signal the 30-day/300-event window may already have truncated real data. unmatched (below 300) goes straight to splitting.",
+                "position": {
+                    "x": -312,
+                    "y": 656
+                },
+                "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Routing Strategy": "Route to Property name",
+                    "at_ceiling": "${event.count:equals(300)}"
+                },
+                "propertyDescriptors": {
+                    "Routing Strategy": {
+                        "name": "Routing Strategy",
+                        "displayName": "Routing Strategy",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "at_ceiling": {
+                        "name": "at_ceiling",
+                        "displayName": "at_ceiling",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "14c0d650-9cdf-3a01-a035-0a6204f8dc51",
+                "instanceIdentifier": "b3dd83e1-01a0-1000-ce48-0dd8cf1f1962",
+                "name": "Count events in response",
+                "comments": "Counted before SplitJson runs, on the still-whole response array - the 300-event ceiling check downstream needs the original page size, which is lost once the array is split into one flowfile per event.",
+                "position": {
+                    "x": 320,
+                    "y": 488
+                },
+                "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Destination": "flowfile-attribute",
+                    "Max String Length": "20 MB",
+                    "event.count": "$.length()",
+                    "Return Type": "auto-detect",
+                    "Null Value Representation": "empty string",
+                    "Path Not Found Behavior": "ignore"
+                },
+                "propertyDescriptors": {
+                    "Destination": {
+                        "name": "Destination",
+                        "displayName": "Destination",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Max String Length": {
+                        "name": "Max String Length",
+                        "displayName": "Max String Length",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "event.count": {
+                        "name": "event.count",
+                        "displayName": "event.count",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Return Type": {
+                        "name": "Return Type",
+                        "displayName": "Return Type",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Null Value Representation": {
+                        "name": "Null Value Representation",
+                        "displayName": "Null Value Representation",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Path Not Found Behavior": {
+                        "name": "Path Not Found Behavior",
+                        "displayName": "Path Not Found Behavior",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 0,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "245b8c8b-8c9a-31d2-8c3d-004a4baae1ae",
+                "instanceIdentifier": "b3dcc1e4-01a0-1000-a12c-12bf49d902d3",
+                "name": "Log operational warning",
+                "comments": "Shared sink for: rate-limit-exhausted polls, and RetryFlowFile's retries_exceeded. Visible in NiFi's bulletin board / app log, not silently dropped.",
+                "position": {
+                    "x": 1176,
+                    "y": 200
+                },
+                "type": "org.apache.nifi.processors.standard.LogAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Log FlowFile Properties": "true",
+                    "Log Level": "warn",
+                    "Attributes to Ignore": null,
+                    "Attributes to Log": null,
+                    "Attributes to Ignore Regular Expression": null,
+                    "Output Format": "Line per Attribute",
+                    "Log Payload": "false",
+                    "Log Prefix": null,
+                    "Character Set": "UTF-8",
+                    "Attributes to Log Regular Expression": ".*"
+                },
+                "propertyDescriptors": {
+                    "Log FlowFile Properties": {
+                        "name": "Log FlowFile Properties",
+                        "displayName": "Log FlowFile Properties",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Level": {
+                        "name": "Log Level",
+                        "displayName": "Log Level",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Ignore": {
+                        "name": "Attributes to Ignore",
+                        "displayName": "Attributes to Ignore",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Log": {
+                        "name": "Attributes to Log",
+                        "displayName": "Attributes to Log",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Ignore Regular Expression": {
+                        "name": "Attributes to Ignore Regular Expression",
+                        "displayName": "Attributes to Ignore Regular Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Output Format": {
+                        "name": "Output Format",
+                        "displayName": "Output Format",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Payload": {
+                        "name": "Log Payload",
+                        "displayName": "Log Payload",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Prefix": {
+                        "name": "Log Prefix",
+                        "displayName": "Log Prefix",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Character Set": {
+                        "name": "Character Set",
+                        "displayName": "Character Set",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Log Regular Expression": {
+                        "name": "Attributes to Log Regular Expression",
+                        "displayName": "Attributes to Log Regular Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "success"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "536301e6-c996-3e07-b69e-836bf799cd0c",
+                "instanceIdentifier": "b3e06611-01a0-1000-dfe7-7c39da1f0bc9",
+                "name": "Extract event id and type",
+                "comments": "event.id becomes PublishKafka's message key (kafka-topic-contract.md: same event redelivered lands on the same partition); event.type drives the topic lookup next.",
+                "position": {
+                    "x": 312,
+                    "y": 904
+                },
+                "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Destination": "flowfile-attribute",
+                    "Max String Length": "20 MB",
+                    "Return Type": "auto-detect",
+                    "event.type": "$.type",
+                    "Null Value Representation": "empty string",
+                    "event.id": "$.id",
+                    "Path Not Found Behavior": "ignore"
+                },
+                "propertyDescriptors": {
+                    "Destination": {
+                        "name": "Destination",
+                        "displayName": "Destination",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Max String Length": {
+                        "name": "Max String Length",
+                        "displayName": "Max String Length",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Return Type": {
+                        "name": "Return Type",
+                        "displayName": "Return Type",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "event.type": {
+                        "name": "event.type",
+                        "displayName": "event.type",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Null Value Representation": {
+                        "name": "Null Value Representation",
+                        "displayName": "Null Value Representation",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "event.id": {
+                        "name": "event.id",
+                        "displayName": "event.id",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Path Not Found Behavior": {
+                        "name": "Path Not Found Behavior",
+                        "displayName": "Path Not Found Behavior",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 0,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "failure",
+                    "unmatched"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "69997037-613e-3443-a8f1-fbc88d018334",
+                "instanceIdentifier": "b3df7920-01a0-1000-5d7c-f9d3849afa77",
+                "name": "Log possible window truncation",
+                "comments": "Logs and continues - this poll's events still get split and published below, nothing is dropped on this signal alone.",
+                "position": {
+                    "x": 1184,
+                    "y": 664
+                },
+                "type": "org.apache.nifi.processors.standard.LogAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Log FlowFile Properties": "true",
+                    "Log Level": "warn",
+                    "Attributes to Ignore": null,
+                    "Attributes to Log": "event.count, poll.max.window.count",
+                    "Attributes to Ignore Regular Expression": null,
+                    "Output Format": "Line per Attribute",
+                    "Log Payload": "false",
+                    "Log Prefix": null,
+                    "Character Set": "UTF-8",
+                    "Attributes to Log Regular Expression": ".*"
+                },
+                "propertyDescriptors": {
+                    "Log FlowFile Properties": {
+                        "name": "Log FlowFile Properties",
+                        "displayName": "Log FlowFile Properties",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Level": {
+                        "name": "Log Level",
+                        "displayName": "Log Level",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Ignore": {
+                        "name": "Attributes to Ignore",
+                        "displayName": "Attributes to Ignore",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Log": {
+                        "name": "Attributes to Log",
+                        "displayName": "Attributes to Log",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Ignore Regular Expression": {
+                        "name": "Attributes to Ignore Regular Expression",
+                        "displayName": "Attributes to Ignore Regular Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Output Format": {
+                        "name": "Output Format",
+                        "displayName": "Output Format",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Payload": {
+                        "name": "Log Payload",
+                        "displayName": "Log Payload",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Prefix": {
+                        "name": "Log Prefix",
+                        "displayName": "Log Prefix",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Character Set": {
+                        "name": "Character Set",
+                        "displayName": "Character Set",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Log Regular Expression": {
+                        "name": "Attributes to Log Regular Expression",
+                        "displayName": "Attributes to Log Regular Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "7272f19a-2e0a-3404-b002-1e372628d0cb",
+                "instanceIdentifier": "b3df015d-01a0-1000-0e49-e826bf389503",
+                "name": "Increment 300-event counter",
+                "comments": "",
+                "position": {
+                    "x": 312,
+                    "y": 672
+                },
+                "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-update-attribute-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Delete Attributes Expression": null,
+                    "Store State": "Store state locally",
+                    "Cache Value Lookup Cache Size": "100",
+                    "Stateful Variables Initial Value": "0"
+                },
+                "propertyDescriptors": {
+                    "Delete Attributes Expression": {
+                        "name": "Delete Attributes Expression",
+                        "displayName": "Delete Attributes Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Store State": {
+                        "name": "Store State",
+                        "displayName": "Store State",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Cache Value Lookup Cache Size": {
+                        "name": "Cache Value Lookup Cache Size",
+                        "displayName": "Cache Value Lookup Cache Size",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Stateful Variables Initial Value": {
+                        "name": "Stateful Variables Initial Value",
+                        "displayName": "Stateful Variables Initial Value",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "2933990f-647b-32a0-9138-887a7e661584",
+                "instanceIdentifier": "b0e46e05-01a0-1000-5379-4ca0cd7af93b",
+                "name": "Track ETag and rate-limit headers",
+                "comments": "previous.etag is a plain attribute, not processor state — the loop-back connection to Poll GitHub Events API is what actually carries it forward between scheduled runs, since InvokeHTTP has no stateful capability of its own to read state from a different processor.",
+                "position": {
+                    "x": -320,
+                    "y": 80
+                },
+                "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-update-attribute-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "poll.interval.hint": "${x-poll-interval}",
+                    "Delete Attributes Expression": null,
+                    "Store State": "Do not store state",
+                    "ratelimit.remaining": "${x-ratelimit-remaining}",
+                    "previous.etag": "${etag}",
+                    "http.status": "${invokehttp.status.code}",
+                    "Cache Value Lookup Cache Size": "100",
+                    "Stateful Variables Initial Value": null
+                },
+                "propertyDescriptors": {
+                    "poll.interval.hint": {
+                        "name": "poll.interval.hint",
+                        "displayName": "poll.interval.hint",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Delete Attributes Expression": {
+                        "name": "Delete Attributes Expression",
+                        "displayName": "Delete Attributes Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Store State": {
+                        "name": "Store State",
+                        "displayName": "Store State",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "ratelimit.remaining": {
+                        "name": "ratelimit.remaining",
+                        "displayName": "ratelimit.remaining",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "previous.etag": {
+                        "name": "previous.etag",
+                        "displayName": "previous.etag",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "http.status": {
+                        "name": "http.status",
+                        "displayName": "http.status",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Cache Value Lookup Cache Size": {
+                        "name": "Cache Value Lookup Cache Size",
+                        "displayName": "Cache Value Lookup Cache Size",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Stateful Variables Initial Value": {
+                        "name": "Stateful Variables Initial Value",
+                        "displayName": "Stateful Variables Initial Value",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "15833c19-a282-3539-bb5a-e02c2c7cc740",
+                "instanceIdentifier": "b3e2745c-01a0-1000-6cd6-a8f1c2765009",
+                "name": "Log Kafka publish failure",
+                "comments": "Terminal dead-letter logging for whatever residual failure class Publish to Kafka's Rollback Failure Strategy can't retry its way past (not yet characterised empirically) - ordinary connectivity outages are handled by Rollback instead (queued and retried automatically, see step 15), so this sink is now the exception path not the primary Kafka-failure handler it was in the original design.",
+                "position": {
+                    "x": 1184,
+                    "y": 1912
+                },
+                "type": "org.apache.nifi.processors.standard.LogAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Log FlowFile Properties": "true",
+                    "Log Level": "error",
+                    "Attributes to Ignore": null,
+                    "Attributes to Log": null,
+                    "Attributes to Ignore Regular Expression": null,
+                    "Output Format": "Line per Attribute",
+                    "Log Payload": "false",
+                    "Log Prefix": null,
+                    "Character Set": "UTF-8",
+                    "Attributes to Log Regular Expression": ".*"
+                },
+                "propertyDescriptors": {
+                    "Log FlowFile Properties": {
+                        "name": "Log FlowFile Properties",
+                        "displayName": "Log FlowFile Properties",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Level": {
+                        "name": "Log Level",
+                        "displayName": "Log Level",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Ignore": {
+                        "name": "Attributes to Ignore",
+                        "displayName": "Attributes to Ignore",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Log": {
+                        "name": "Attributes to Log",
+                        "displayName": "Attributes to Log",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Ignore Regular Expression": {
+                        "name": "Attributes to Ignore Regular Expression",
+                        "displayName": "Attributes to Ignore Regular Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Output Format": {
+                        "name": "Output Format",
+                        "displayName": "Output Format",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Payload": {
+                        "name": "Log Payload",
+                        "displayName": "Log Payload",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Prefix": {
+                        "name": "Log Prefix",
+                        "displayName": "Log Prefix",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Character Set": {
+                        "name": "Character Set",
+                        "displayName": "Character Set",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Log Regular Expression": {
+                        "name": "Attributes to Log Regular Expression",
+                        "displayName": "Attributes to Log Regular Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "success"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "a5d80dc6-884a-3c0b-a9e7-98b37bbc2398",
+                "instanceIdentifier": "b3e1ade5-01a0-1000-5ce4-f052a23e552c",
+                "name": "Log unmatched event type",
+                "comments": "Visibility so a genuinely new GitHub event type gets noticed and added to config/topic-map.properties, rather than quietly living in the fallback topic indefinitely",
+                "position": {
+                    "x": 1184,
+                    "y": 1624
+                },
+                "type": "org.apache.nifi.processors.standard.LogAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Log FlowFile Properties": "true",
+                    "Log Level": "warn",
+                    "Attributes to Ignore": null,
+                    "Attributes to Log": "event.type",
+                    "Attributes to Ignore Regular Expression": null,
+                    "Output Format": "Line per Attribute",
+                    "Log Payload": "false",
+                    "Log Prefix": null,
+                    "Character Set": "UTF-8",
+                    "Attributes to Log Regular Expression": ".*"
+                },
+                "propertyDescriptors": {
+                    "Log FlowFile Properties": {
+                        "name": "Log FlowFile Properties",
+                        "displayName": "Log FlowFile Properties",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Level": {
+                        "name": "Log Level",
+                        "displayName": "Log Level",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Ignore": {
+                        "name": "Attributes to Ignore",
+                        "displayName": "Attributes to Ignore",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Log": {
+                        "name": "Attributes to Log",
+                        "displayName": "Attributes to Log",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Ignore Regular Expression": {
+                        "name": "Attributes to Ignore Regular Expression",
+                        "displayName": "Attributes to Ignore Regular Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Output Format": {
+                        "name": "Output Format",
+                        "displayName": "Output Format",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Payload": {
+                        "name": "Log Payload",
+                        "displayName": "Log Payload",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Log Prefix": {
+                        "name": "Log Prefix",
+                        "displayName": "Log Prefix",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Character Set": {
+                        "name": "Character Set",
+                        "displayName": "Character Set",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Attributes to Log Regular Expression": {
+                        "name": "Attributes to Log Regular Expression",
+                        "displayName": "Attributes to Log Regular Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "1779332a-ee93-33c3-9ed3-d575ab2b965b",
+                "instanceIdentifier": "a6e45ed6-01a0-1000-0ca8-956eb07970b9",
+                "name": "Retry on connection failure",
+                "comments": "FR-005: retries InvokeHTTP's Failure/Retry relationships (connection errors, non-2xx) with penalised backoff, distinct from the rate-limit path below. retries_exceeded routes to the shared operational-warning log rather than looping forever.",
+                "position": {
+                    "x": 920,
+                    "y": -24
+                },
+                "type": "org.apache.nifi.processors.standard.RetryFlowFile",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Reuse Mode": "fail",
+                    "Retry Attribute": "invokehttp.retry.count",
+                    "Penalize Retries": "true",
+                    "Fail on Nonnumerical Overwrite": "false",
+                    "Maximum Retries": "10"
+                },
+                "propertyDescriptors": {
+                    "Reuse Mode": {
+                        "name": "Reuse Mode",
+                        "displayName": "Reuse Mode",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Retry Attribute": {
+                        "name": "Retry Attribute",
+                        "displayName": "Retry Attribute",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Penalize Retries": {
+                        "name": "Penalize Retries",
+                        "displayName": "Penalize Retries",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Fail on Nonnumerical Overwrite": {
+                        "name": "Fail on Nonnumerical Overwrite",
+                        "displayName": "Fail on Nonnumerical Overwrite",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Maximum Retries": {
+                        "name": "Maximum Retries",
+                        "displayName": "Maximum Retries",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 0,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "failure"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "ff458e0c-e85d-35a4-b2f2-756464db8fb7",
+                "instanceIdentifier": "b3e147e4-01a0-1000-a8cb-c12a0978483b",
+                "name": "Fallback topic for unmatched type",
+                "comments": "Must match the default value in config/topic-map.properties (T007) - PropertiesFileLookupService has no native fallback so this value is kept in sync by hand. If T007's default ever changes update this property too.",
+                "position": {
+                    "x": 616,
+                    "y": 1632
+                },
+                "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-update-attribute-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Delete Attributes Expression": null,
+                    "Store State": "Do not store state",
+                    "kafka.topic": "github-events.other-activity",
+                    "Cache Value Lookup Cache Size": "100",
+                    "Stateful Variables Initial Value": null
+                },
+                "propertyDescriptors": {
+                    "Delete Attributes Expression": {
+                        "name": "Delete Attributes Expression",
+                        "displayName": "Delete Attributes Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Store State": {
+                        "name": "Store State",
+                        "displayName": "Store State",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "kafka.topic": {
+                        "name": "kafka.topic",
+                        "displayName": "kafka.topic",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": true
+                    },
+                    "Cache Value Lookup Cache Size": {
+                        "name": "Cache Value Lookup Cache Size",
+                        "displayName": "Cache Value Lookup Cache Size",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Stateful Variables Initial Value": {
+                        "name": "Stateful Variables Initial Value",
+                        "displayName": "Stateful Variables Initial Value",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 25,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "926935d8-4158-377b-8151-2f2760e1bf6e",
+                "instanceIdentifier": "b3e20f3f-01a0-1000-b99d-ce4fe4144d8b",
+                "name": "Publish to Kafka",
+                "comments": "Message key = event.id per kafka-topic-contract.md, so same-event redelivery lands on the same partition. Broker connection lives on the Kafka Connection Service controller service, not this processor directly (NiFi 2.x). Failure Strategy = Rollback: a Kafka outage queues events losslessly on this processor's own incoming connection rather than dropping them — designed for outages up to ~1 hour, see the design-scope note below the wiring table in build-guide.md.",
+                "position": {
+                    "x": 336,
+                    "y": 1912
+                },
+                "type": "org.apache.nifi.kafka.processors.PublishKafka",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-kafka-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "compression.type": "none",
+                    "acks": "1",
+                    "Message Demarcator": null,
+                    "Kafka Key Attribute Encoding": "utf-8",
+                    "Record Reader": null,
+                    "Record Metadata Strategy": "FROM_PROPERTIES",
+                    "Transactional ID Prefix": null,
+                    "Header Encoding": "UTF-8",
+                    "max.request.size": "1 MB",
+                    "Topic Name": "${kafka.topic}",
+                    "Kafka Key": "${event.id}",
+                    "partition": null,
+                    "Kafka Connection Service": "77d759a7-3621-3b27-b7b8-d519f6563117",
+                    "Publish Strategy": "USE_VALUE",
+                    "Record Key Writer": null,
+                    "Failure Strategy": "Rollback",
+                    "partitioner.class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+                    "Record Writer": null,
+                    "Transactions Enabled": "false",
+                    "Message Key Field": null,
+                    "FlowFile Attribute Header Pattern": null
+                },
+                "propertyDescriptors": {
+                    "compression.type": {
+                        "name": "compression.type",
+                        "displayName": "Compression Type",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "acks": {
+                        "name": "acks",
+                        "displayName": "Delivery Guarantee",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Message Demarcator": {
+                        "name": "Message Demarcator",
+                        "displayName": "Message Demarcator",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Kafka Key Attribute Encoding": {
+                        "name": "Kafka Key Attribute Encoding",
+                        "displayName": "Kafka Key Attribute Encoding",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Record Reader": {
+                        "name": "Record Reader",
+                        "displayName": "Record Reader",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Record Metadata Strategy": {
+                        "name": "Record Metadata Strategy",
+                        "displayName": "Record Metadata Strategy",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Transactional ID Prefix": {
+                        "name": "Transactional ID Prefix",
+                        "displayName": "Transactional ID Prefix",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Header Encoding": {
+                        "name": "Header Encoding",
+                        "displayName": "Header Encoding",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "max.request.size": {
+                        "name": "max.request.size",
+                        "displayName": "Max Request Size",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Topic Name": {
+                        "name": "Topic Name",
+                        "displayName": "Topic Name",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Kafka Key": {
+                        "name": "Kafka Key",
+                        "displayName": "Kafka Key",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "partition": {
+                        "name": "partition",
+                        "displayName": "Partition",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Kafka Connection Service": {
+                        "name": "Kafka Connection Service",
+                        "displayName": "Kafka Connection Service",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Publish Strategy": {
+                        "name": "Publish Strategy",
+                        "displayName": "Publish Strategy",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Record Key Writer": {
+                        "name": "Record Key Writer",
+                        "displayName": "Record Key Writer",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Failure Strategy": {
+                        "name": "Failure Strategy",
+                        "displayName": "Failure Strategy",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "partitioner.class": {
+                        "name": "partitioner.class",
+                        "displayName": "Partitioner Class",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Record Writer": {
+                        "name": "Record Writer",
+                        "displayName": "Record Writer",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Transactions Enabled": {
+                        "name": "Transactions Enabled",
+                        "displayName": "Transactions Enabled",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Message Key Field": {
+                        "name": "Message Key Field",
+                        "displayName": "Message Key Field",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "FlowFile Attribute Header Pattern": {
+                        "name": "FlowFile Attribute Header Pattern",
+                        "displayName": "FlowFile Attribute Header Pattern",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 0,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "success"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "4209b62b-6356-39b3-bf22-805a14a82443",
+                "instanceIdentifier": "b03675ac-01a0-1000-1e64-cf6b015f1527",
+                "name": "Seed the flow",
+                "comments": "",
+                "position": {
+                    "x": -360,
+                    "y": -272
+                },
+                "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "File Size": "0B",
+                    "Batch Size": "1",
+                    "Unique FlowFiles": "false",
+                    "Mime Type": null,
+                    "Custom Text": null,
+                    "Character Set": "UTF-8",
+                    "Data Format": "Text"
+                },
+                "propertyDescriptors": {
+                    "File Size": {
+                        "name": "File Size",
+                        "displayName": "File Size",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Batch Size": {
+                        "name": "Batch Size",
+                        "displayName": "Batch Size",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Unique FlowFiles": {
+                        "name": "Unique FlowFiles",
+                        "displayName": "Unique FlowFiles",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Mime Type": {
+                        "name": "Mime Type",
+                        "displayName": "Mime Type",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Custom Text": {
+                        "name": "Custom Text",
+                        "displayName": "Custom Text",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Character Set": {
+                        "name": "Character Set",
+                        "displayName": "Character Set",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Data Format": {
+                        "name": "Data Format",
+                        "displayName": "Data Format",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "30 min",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 0,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "d1f172a1-1b32-3f58-aa7d-45a23cc65cef",
+                "instanceIdentifier": "b3dff72e-01a0-1000-4391-4ed8ae079343",
+                "name": "Split events array",
+                "comments": "One flowfile per array element - kafka-topic-contract.md's 'NiFi does not transform or reshape the event before publishing' applies from here on: each split flowfile's content stays the untouched, single-event JSON object.",
+                "position": {
+                    "x": 320,
+                    "y": 904
+                },
+                "type": "org.apache.nifi.processors.standard.SplitJson",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-standard-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Max String Length": "20 MB",
+                    "Null Value Representation": "empty string",
+                    "JsonPath Expression": "$.*"
+                },
+                "propertyDescriptors": {
+                    "Max String Length": {
+                        "name": "Max String Length",
+                        "displayName": "Max String Length",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "Null Value Representation": {
+                        "name": "Null Value Representation",
+                        "displayName": "Null Value Representation",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "JsonPath Expression": {
+                        "name": "JsonPath Expression",
+                        "displayName": "JsonPath Expression",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "style": {},
+                "schedulingPeriod": "0 sec",
+                "schedulingStrategy": "TIMER_DRIVEN",
+                "executionNode": "ALL",
+                "penaltyDuration": "30 sec",
+                "yieldDuration": "1 sec",
+                "bulletinLevel": "WARN",
+                "runDurationMillis": 0,
+                "concurrentlySchedulableTaskCount": 1,
+                "autoTerminatedRelationships": [
+                    "original"
+                ],
+                "scheduledState": "ENABLED",
+                "retryCount": 10,
+                "retriedRelationships": [],
+                "backoffMechanism": "PENALIZE_FLOWFILE",
+                "maxBackoffPeriod": "10 mins",
+                "componentType": "PROCESSOR",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            }
+        ],
+        "inputPorts": [],
+        "outputPorts": [],
+        "connections": [
+            {
+                "identifier": "fa652a9a-ce5a-3060-8195-84941eb110ff",
+                "instanceIdentifier": "b0e63360-01a0-1000-05f9-15ecfb164b18",
+                "name": "",
+                "source": {
+                    "id": "4307f10b-245c-3627-aa9b-2117acfb7560",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Poll GitHub Events API",
+                    "comments": "60s default matches GitHub's X-Poll-Interval; re-tune if a poll response's own X-Poll-Interval header (captured below) says otherwise. If-None-Match/Authorization are only sent when the referenced attribute/parameter is non-empty.",
+                    "instanceIdentifier": "a4f5eccb-01a0-1000-3665-7341bd5aa6d2"
+                },
+                "destination": {
+                    "id": "2933990f-647b-32a0-9138-887a7e661584",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Track ETag and rate-limit headers",
+                    "comments": "previous.etag is a plain attribute, not processor state — the loop-back connection to Poll GitHub Events API is what actually carries it forward between scheduled runs, since InvokeHTTP has no stateful capability of its own to read state from a different processor.",
+                    "instanceIdentifier": "b0e46e05-01a0-1000-5379-4ca0cd7af93b"
+                },
+                "labelIndex": 0,
+                "zIndex": 9,
+                "selectedRelationships": [
+                    "Response"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "9d8e4882-03f4-3440-ba2e-dad273ec9681",
+                "instanceIdentifier": "b40e0ff2-01a0-1000-fb57-9960399b8f66",
+                "name": "",
+                "source": {
+                    "id": "7272f19a-2e0a-3404-b002-1e372628d0cb",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Increment 300-event counter",
+                    "comments": "",
+                    "instanceIdentifier": "b3df015d-01a0-1000-0e49-e826bf389503"
+                },
+                "destination": {
+                    "id": "7272f19a-2e0a-3404-b002-1e372628d0cb",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Increment 300-event counter",
+                    "comments": "",
+                    "instanceIdentifier": "b3df015d-01a0-1000-0e49-e826bf389503"
+                },
+                "labelIndex": 1,
+                "zIndex": 18,
+                "selectedRelationships": [
+                    "set state fail"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [
+                    {
+                        "x": 792,
+                        "y": 760
+                    },
+                    {
+                        "x": 792,
+                        "y": 856
+                    }
+                ],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "3e69441a-e496-37e2-b3fe-9e93c1086948",
+                "instanceIdentifier": "b3e427c7-01a0-1000-a3c2-610f3a0a5084",
+                "name": "",
+                "source": {
+                    "id": "d7e97b49-b8bc-3d1e-84b9-f1212d871864",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Route on HTTP status and rate limit",
+                    "comments": "not_modified (304, ETag hit) is a normal no-op - the next scheduled poll will check again, no rate-limit budget spent. Everything else falls through unmatched to the event-counting step.",
+                    "instanceIdentifier": "b3c49456-01a0-1000-631c-5b8dfd6a1d02"
+                },
+                "destination": {
+                    "id": "245b8c8b-8c9a-31d2-8c3d-004a4baae1ae",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log operational warning",
+                    "comments": "Shared sink for: rate-limit-exhausted polls, and RetryFlowFile's retries_exceeded. Visible in NiFi's bulletin board / app log, not silently dropped.",
+                    "instanceIdentifier": "b3dcc1e4-01a0-1000-a12c-12bf49d902d3"
+                },
+                "labelIndex": 0,
+                "zIndex": 12,
+                "selectedRelationships": [
+                    "rate_limited"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "0944a1cb-103d-3436-bf4c-7c12b1d20882",
+                "instanceIdentifier": "b4123f15-01a0-1000-0035-38ac02fee008",
+                "name": "",
+                "source": {
+                    "id": "69997037-613e-3443-a8f1-fbc88d018334",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log possible window truncation",
+                    "comments": "Logs and continues - this poll's events still get split and published below, nothing is dropped on this signal alone.",
+                    "instanceIdentifier": "b3df7920-01a0-1000-5d7c-f9d3849afa77"
+                },
+                "destination": {
+                    "id": "d1f172a1-1b32-3f58-aa7d-45a23cc65cef",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Split events array",
+                    "comments": "One flowfile per array element - kafka-topic-contract.md's 'NiFi does not transform or reshape the event before publishing' applies from here on: each split flowfile's content stays the untouched, single-event JSON object.",
+                    "instanceIdentifier": "b3dff72e-01a0-1000-4391-4ed8ae079343"
+                },
+                "labelIndex": 0,
+                "zIndex": 20,
+                "selectedRelationships": [
+                    "success"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "46728477-1f52-3bca-8451-81a44127a1bc",
+                "instanceIdentifier": "b40c5183-01a0-1000-ad97-62b000334325",
+                "name": "",
+                "source": {
+                    "id": "d5e014f0-96a7-372e-952d-9883ab729351",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Check 300-event ceiling",
+                    "comments": "A poll returning exactly 300 events (the API's documented maximum) is a cheap, reliable signal the 30-day/300-event window may already have truncated real data. unmatched (below 300) goes straight to splitting.",
+                    "instanceIdentifier": "b3de710d-01a0-1000-e450-233440a53f6c"
+                },
+                "destination": {
+                    "id": "d1f172a1-1b32-3f58-aa7d-45a23cc65cef",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Split events array",
+                    "comments": "One flowfile per array element - kafka-topic-contract.md's 'NiFi does not transform or reshape the event before publishing' applies from here on: each split flowfile's content stays the untouched, single-event JSON object.",
+                    "instanceIdentifier": "b3dff72e-01a0-1000-4391-4ed8ae079343"
+                },
+                "labelIndex": 0,
+                "zIndex": 17,
+                "selectedRelationships": [
+                    "unmatched"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "878cc5f4-8d9e-3e8b-b1f1-c9bec2c2aba1",
+                "instanceIdentifier": "b407c31d-01a0-1000-8742-f664f4c05634",
+                "name": "",
+                "source": {
+                    "id": "14c0d650-9cdf-3a01-a035-0a6204f8dc51",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Count events in response",
+                    "comments": "Counted before SplitJson runs, on the still-whole response array - the 300-event ceiling check downstream needs the original page size, which is lost once the array is split into one flowfile per event.",
+                    "instanceIdentifier": "b3dd83e1-01a0-1000-ce48-0dd8cf1f1962"
+                },
+                "destination": {
+                    "id": "d5e014f0-96a7-372e-952d-9883ab729351",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Check 300-event ceiling",
+                    "comments": "A poll returning exactly 300 events (the API's documented maximum) is a cheap, reliable signal the 30-day/300-event window may already have truncated real data. unmatched (below 300) goes straight to splitting.",
+                    "instanceIdentifier": "b3de710d-01a0-1000-e450-233440a53f6c"
+                },
+                "labelIndex": 0,
+                "zIndex": 15,
+                "selectedRelationships": [
+                    "matched"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "6b404df9-3457-361c-a38b-9a8782557e90",
+                "instanceIdentifier": "b40f083d-01a0-1000-f7fc-7aa5e7ec306c",
+                "name": "",
+                "source": {
+                    "id": "7272f19a-2e0a-3404-b002-1e372628d0cb",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Increment 300-event counter",
+                    "comments": "",
+                    "instanceIdentifier": "b3df015d-01a0-1000-0e49-e826bf389503"
+                },
+                "destination": {
+                    "id": "69997037-613e-3443-a8f1-fbc88d018334",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log possible window truncation",
+                    "comments": "Logs and continues - this poll's events still get split and published below, nothing is dropped on this signal alone.",
+                    "instanceIdentifier": "b3df7920-01a0-1000-5d7c-f9d3849afa77"
+                },
+                "labelIndex": 0,
+                "zIndex": 19,
+                "selectedRelationships": [
+                    "success"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "8ec8ce24-5d70-3306-97bd-ed0b9a431d7f",
+                "instanceIdentifier": "b43d8bd3-01a0-1000-2ff9-8fff96de57b1",
+                "name": "",
+                "source": {
+                    "id": "ff458e0c-e85d-35a4-b2f2-756464db8fb7",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Fallback topic for unmatched type",
+                    "comments": "Must match the default value in config/topic-map.properties (T007) - PropertiesFileLookupService has no native fallback so this value is kept in sync by hand. If T007's default ever changes update this property too.",
+                    "instanceIdentifier": "b3e147e4-01a0-1000-a8cb-c12a0978483b"
+                },
+                "destination": {
+                    "id": "a5d80dc6-884a-3c0b-a9e7-98b37bbc2398",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log unmatched event type",
+                    "comments": "Visibility so a genuinely new GitHub event type gets noticed and added to config/topic-map.properties, rather than quietly living in the fallback topic indefinitely",
+                    "instanceIdentifier": "b3e1ade5-01a0-1000-5ce4-f052a23e552c"
+                },
+                "labelIndex": 0,
+                "zIndex": 26,
+                "selectedRelationships": [
+                    "success"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "c66aeba0-4f8b-302d-989e-29ebc53bb14f",
+                "instanceIdentifier": "b43a74af-01a0-1000-248b-dd807e50287a",
+                "name": "",
+                "source": {
+                    "id": "06806c97-1dbd-3876-b2e8-73ff5b87b7e0",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Resolve Kafka topic",
+                    "comments": "matched -> straight to PublishKafka with kafka.topic set. unmatched (a GitHub event type not yet in config/topic-map.properties) routes to the fallback step below rather than being silently dropped",
+                    "instanceIdentifier": "b3e0cd40-01a0-1000-0e8f-a6499b45a319"
+                },
+                "destination": {
+                    "id": "926935d8-4158-377b-8151-2f2760e1bf6e",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Publish to Kafka",
+                    "comments": "Message key = event.id per kafka-topic-contract.md, so same-event redelivery lands on the same partition. Broker connection lives on the Kafka Connection Service controller service, not this processor directly (NiFi 2.x). Failure Strategy = Rollback: a Kafka outage queues events losslessly on this processor's own incoming connection rather than dropping them — designed for outages up to ~1 hour, see the design-scope note below the wiring table in build-guide.md.",
+                    "instanceIdentifier": "b3e20f3f-01a0-1000-b99d-ce4fe4144d8b"
+                },
+                "labelIndex": 0,
+                "zIndex": 24,
+                "selectedRelationships": [
+                    "matched"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "5e4af2ec-27bd-3619-82c8-ff9e4ea2ee45",
+                "instanceIdentifier": "b4168367-01a0-1000-b69f-e4ff4adc5223",
+                "name": "",
+                "source": {
+                    "id": "d1f172a1-1b32-3f58-aa7d-45a23cc65cef",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Split events array",
+                    "comments": "One flowfile per array element - kafka-topic-contract.md's 'NiFi does not transform or reshape the event before publishing' applies from here on: each split flowfile's content stays the untouched, single-event JSON object.",
+                    "instanceIdentifier": "b3dff72e-01a0-1000-4391-4ed8ae079343"
+                },
+                "destination": {
+                    "id": "536301e6-c996-3e07-b69e-836bf799cd0c",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Extract event id and type",
+                    "comments": "event.id becomes PublishKafka's message key (kafka-topic-contract.md: same event redelivered lands on the same partition); event.type drives the topic lookup next.",
+                    "instanceIdentifier": "b3e06611-01a0-1000-dfe7-7c39da1f0bc9"
+                },
+                "labelIndex": 0,
+                "zIndex": 22,
+                "selectedRelationships": [
+                    "split"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "7ab047a0-e35c-3719-bdd0-b0c507c280de",
+                "instanceIdentifier": "b40c3371-01a0-1000-1f9a-7e37203a1210",
+                "name": "",
+                "source": {
+                    "id": "d5e014f0-96a7-372e-952d-9883ab729351",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Check 300-event ceiling",
+                    "comments": "A poll returning exactly 300 events (the API's documented maximum) is a cheap, reliable signal the 30-day/300-event window may already have truncated real data. unmatched (below 300) goes straight to splitting.",
+                    "instanceIdentifier": "b3de710d-01a0-1000-e450-233440a53f6c"
+                },
+                "destination": {
+                    "id": "7272f19a-2e0a-3404-b002-1e372628d0cb",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Increment 300-event counter",
+                    "comments": "",
+                    "instanceIdentifier": "b3df015d-01a0-1000-0e49-e826bf389503"
+                },
+                "labelIndex": 0,
+                "zIndex": 16,
+                "selectedRelationships": [
+                    "at_ceiling"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "57afea39-ebb3-3486-b970-70e3d57a751e",
+                "instanceIdentifier": "b4b23c6f-01a0-1000-30fb-44f93437e589",
+                "name": "",
+                "source": {
+                    "id": "926935d8-4158-377b-8151-2f2760e1bf6e",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Publish to Kafka",
+                    "comments": "Message key = event.id per kafka-topic-contract.md, so same-event redelivery lands on the same partition. Broker connection lives on the Kafka Connection Service controller service, not this processor directly (NiFi 2.x). Failure Strategy = Rollback: a Kafka outage queues events losslessly on this processor's own incoming connection rather than dropping them — designed for outages up to ~1 hour, see the design-scope note below the wiring table in build-guide.md.",
+                    "instanceIdentifier": "b3e20f3f-01a0-1000-b99d-ce4fe4144d8b"
+                },
+                "destination": {
+                    "id": "15833c19-a282-3539-bb5a-e02c2c7cc740",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log Kafka publish failure",
+                    "comments": "Terminal dead-letter logging for whatever residual failure class Publish to Kafka's Rollback Failure Strategy can't retry its way past (not yet characterised empirically) - ordinary connectivity outages are handled by Rollback instead (queued and retried automatically, see step 15), so this sink is now the exception path not the primary Kafka-failure handler it was in the original design.",
+                    "instanceIdentifier": "b3e2745c-01a0-1000-6cd6-a8f1c2765009"
+                },
+                "labelIndex": 0,
+                "zIndex": 28,
+                "selectedRelationships": [
+                    "failure"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "06e7394b-5bde-3a80-8eaa-52fc6aaa699c",
+                "instanceIdentifier": "b0f8b9de-01a0-1000-5c0a-69a36dbe9b0e",
+                "name": "",
+                "source": {
+                    "id": "2933990f-647b-32a0-9138-887a7e661584",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Track ETag and rate-limit headers",
+                    "comments": "previous.etag is a plain attribute, not processor state — the loop-back connection to Poll GitHub Events API is what actually carries it forward between scheduled runs, since InvokeHTTP has no stateful capability of its own to read state from a different processor.",
+                    "instanceIdentifier": "b0e46e05-01a0-1000-5379-4ca0cd7af93b"
+                },
+                "destination": {
+                    "id": "4307f10b-245c-3627-aa9b-2117acfb7560",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Poll GitHub Events API",
+                    "comments": "60s default matches GitHub's X-Poll-Interval; re-tune if a poll response's own X-Poll-Interval header (captured below) says otherwise. If-None-Match/Authorization are only sent when the referenced attribute/parameter is non-empty.",
+                    "instanceIdentifier": "a4f5eccb-01a0-1000-3665-7341bd5aa6d2"
+                },
+                "labelIndex": 0,
+                "zIndex": 10,
+                "selectedRelationships": [
+                    "success"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [
+                    {
+                        "x": 272,
+                        "y": 48
+                    }
+                ],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "871f19ac-28fd-372e-975a-455ba6db5616",
+                "instanceIdentifier": "b43ad08b-01a0-1000-6f77-dc8776b3766f",
+                "name": "",
+                "source": {
+                    "id": "06806c97-1dbd-3876-b2e8-73ff5b87b7e0",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Resolve Kafka topic",
+                    "comments": "matched -> straight to PublishKafka with kafka.topic set. unmatched (a GitHub event type not yet in config/topic-map.properties) routes to the fallback step below rather than being silently dropped",
+                    "instanceIdentifier": "b3e0cd40-01a0-1000-0e8f-a6499b45a319"
+                },
+                "destination": {
+                    "id": "ff458e0c-e85d-35a4-b2f2-756464db8fb7",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Fallback topic for unmatched type",
+                    "comments": "Must match the default value in config/topic-map.properties (T007) - PropertiesFileLookupService has no native fallback so this value is kept in sync by hand. If T007's default ever changes update this property too.",
+                    "instanceIdentifier": "b3e147e4-01a0-1000-a8cb-c12a0978483b"
+                },
+                "labelIndex": 0,
+                "zIndex": 25,
+                "selectedRelationships": [
+                    "unmatched"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "33bfbed0-147f-3894-8f28-caca51c64ada",
+                "instanceIdentifier": "b4b3f49e-01a0-1000-638c-5d78e2b1882a",
+                "name": "",
+                "source": {
+                    "id": "1779332a-ee93-33c3-9ed3-d575ab2b965b",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Retry on connection failure",
+                    "comments": "FR-005: retries InvokeHTTP's Failure/Retry relationships (connection errors, non-2xx) with penalised backoff, distinct from the rate-limit path below. retries_exceeded routes to the shared operational-warning log rather than looping forever.",
+                    "instanceIdentifier": "a6e45ed6-01a0-1000-0ca8-956eb07970b9"
+                },
+                "destination": {
+                    "id": "245b8c8b-8c9a-31d2-8c3d-004a4baae1ae",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log operational warning",
+                    "comments": "Shared sink for: rate-limit-exhausted polls, and RetryFlowFile's retries_exceeded. Visible in NiFi's bulletin board / app log, not silently dropped.",
+                    "instanceIdentifier": "b3dcc1e4-01a0-1000-a12c-12bf49d902d3"
+                },
+                "labelIndex": 0,
+                "zIndex": 29,
+                "selectedRelationships": [
+                    "retries_exceeded"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "e1966f29-ecc4-3ddf-a6db-eff841afa966",
+                "instanceIdentifier": "a6e80e94-01a0-1000-5634-dbdbbaabe030",
+                "name": "",
+                "source": {
+                    "id": "4307f10b-245c-3627-aa9b-2117acfb7560",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Poll GitHub Events API",
+                    "comments": "60s default matches GitHub's X-Poll-Interval; re-tune if a poll response's own X-Poll-Interval header (captured below) says otherwise. If-None-Match/Authorization are only sent when the referenced attribute/parameter is non-empty.",
+                    "instanceIdentifier": "a4f5eccb-01a0-1000-3665-7341bd5aa6d2"
+                },
+                "destination": {
+                    "id": "1779332a-ee93-33c3-9ed3-d575ab2b965b",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Retry on connection failure",
+                    "comments": "FR-005: retries InvokeHTTP's Failure/Retry relationships (connection errors, non-2xx) with penalised backoff, distinct from the rate-limit path below. retries_exceeded routes to the shared operational-warning log rather than looping forever.",
+                    "instanceIdentifier": "a6e45ed6-01a0-1000-0ca8-956eb07970b9"
+                },
+                "labelIndex": 0,
+                "zIndex": 1,
+                "selectedRelationships": [
+                    "Retry",
+                    "Failure"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "ad776d13-906c-3163-a3d5-d80cd86a3774",
+                "instanceIdentifier": "b3dbc649-01a0-1000-5387-a4350908d572",
+                "name": "",
+                "source": {
+                    "id": "2933990f-647b-32a0-9138-887a7e661584",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Track ETag and rate-limit headers",
+                    "comments": "previous.etag is a plain attribute, not processor state — the loop-back connection to Poll GitHub Events API is what actually carries it forward between scheduled runs, since InvokeHTTP has no stateful capability of its own to read state from a different processor.",
+                    "instanceIdentifier": "b0e46e05-01a0-1000-5379-4ca0cd7af93b"
+                },
+                "destination": {
+                    "id": "d7e97b49-b8bc-3d1e-84b9-f1212d871864",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Route on HTTP status and rate limit",
+                    "comments": "not_modified (304, ETag hit) is a normal no-op - the next scheduled poll will check again, no rate-limit budget spent. Everything else falls through unmatched to the event-counting step.",
+                    "instanceIdentifier": "b3c49456-01a0-1000-631c-5b8dfd6a1d02"
+                },
+                "labelIndex": 0,
+                "zIndex": 11,
+                "selectedRelationships": [
+                    "success"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "64c91ef3-d88c-39df-8fa2-2fb0388431eb",
+                "instanceIdentifier": "b43e8ab2-01a0-1000-78f4-9763a7465272",
+                "name": "",
+                "source": {
+                    "id": "a5d80dc6-884a-3c0b-a9e7-98b37bbc2398",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log unmatched event type",
+                    "comments": "Visibility so a genuinely new GitHub event type gets noticed and added to config/topic-map.properties, rather than quietly living in the fallback topic indefinitely",
+                    "instanceIdentifier": "b3e1ade5-01a0-1000-5ce4-f052a23e552c"
+                },
+                "destination": {
+                    "id": "926935d8-4158-377b-8151-2f2760e1bf6e",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Publish to Kafka",
+                    "comments": "Message key = event.id per kafka-topic-contract.md, so same-event redelivery lands on the same partition. Broker connection lives on the Kafka Connection Service controller service, not this processor directly (NiFi 2.x). Failure Strategy = Rollback: a Kafka outage queues events losslessly on this processor's own incoming connection rather than dropping them — designed for outages up to ~1 hour, see the design-scope note below the wiring table in build-guide.md.",
+                    "instanceIdentifier": "b3e20f3f-01a0-1000-b99d-ce4fe4144d8b"
+                },
+                "labelIndex": 0,
+                "zIndex": 27,
+                "selectedRelationships": [
+                    "success"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "e319092d-e3f2-33ae-8702-ddc94fc31cc6",
+                "instanceIdentifier": "b414db99-01a0-1000-cdac-1fb8508e42d2",
+                "name": "",
+                "source": {
+                    "id": "d1f172a1-1b32-3f58-aa7d-45a23cc65cef",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Split events array",
+                    "comments": "One flowfile per array element - kafka-topic-contract.md's 'NiFi does not transform or reshape the event before publishing' applies from here on: each split flowfile's content stays the untouched, single-event JSON object.",
+                    "instanceIdentifier": "b3dff72e-01a0-1000-4391-4ed8ae079343"
+                },
+                "destination": {
+                    "id": "245b8c8b-8c9a-31d2-8c3d-004a4baae1ae",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log operational warning",
+                    "comments": "Shared sink for: rate-limit-exhausted polls, and RetryFlowFile's retries_exceeded. Visible in NiFi's bulletin board / app log, not silently dropped.",
+                    "instanceIdentifier": "b3dcc1e4-01a0-1000-a12c-12bf49d902d3"
+                },
+                "labelIndex": 0,
+                "zIndex": 21,
+                "selectedRelationships": [
+                    "failure"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "c0b50ae2-1214-3613-80de-3f5bbf75a800",
+                "instanceIdentifier": "b402d28e-01a0-1000-f098-357f9572700b",
+                "name": "",
+                "source": {
+                    "id": "d7e97b49-b8bc-3d1e-84b9-f1212d871864",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Route on HTTP status and rate limit",
+                    "comments": "not_modified (304, ETag hit) is a normal no-op - the next scheduled poll will check again, no rate-limit budget spent. Everything else falls through unmatched to the event-counting step.",
+                    "instanceIdentifier": "b3c49456-01a0-1000-631c-5b8dfd6a1d02"
+                },
+                "destination": {
+                    "id": "14c0d650-9cdf-3a01-a035-0a6204f8dc51",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Count events in response",
+                    "comments": "Counted before SplitJson runs, on the still-whole response array - the 300-event ceiling check downstream needs the original page size, which is lost once the array is split into one flowfile per event.",
+                    "instanceIdentifier": "b3dd83e1-01a0-1000-ce48-0dd8cf1f1962"
+                },
+                "labelIndex": 0,
+                "zIndex": 13,
+                "selectedRelationships": [
+                    "unmatched"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "c4169756-29ab-333b-a777-2bda692dc67b",
+                "instanceIdentifier": "b418b541-01a0-1000-9d84-a44388a61c3e",
+                "name": "",
+                "source": {
+                    "id": "536301e6-c996-3e07-b69e-836bf799cd0c",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Extract event id and type",
+                    "comments": "event.id becomes PublishKafka's message key (kafka-topic-contract.md: same event redelivered lands on the same partition); event.type drives the topic lookup next.",
+                    "instanceIdentifier": "b3e06611-01a0-1000-dfe7-7c39da1f0bc9"
+                },
+                "destination": {
+                    "id": "06806c97-1dbd-3876-b2e8-73ff5b87b7e0",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Resolve Kafka topic",
+                    "comments": "matched -> straight to PublishKafka with kafka.topic set. unmatched (a GitHub event type not yet in config/topic-map.properties) routes to the fallback step below rather than being silently dropped",
+                    "instanceIdentifier": "b3e0cd40-01a0-1000-0e8f-a6499b45a319"
+                },
+                "labelIndex": 0,
+                "zIndex": 23,
+                "selectedRelationships": [
+                    "matched"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "025e8f56-b54c-3009-8614-8a368e539e07",
+                "instanceIdentifier": "b036d33e-01a0-1000-7534-90c256b5eb92",
+                "name": "Seed the whole flow",
+                "source": {
+                    "id": "4209b62b-6356-39b3-bf22-805a14a82443",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Seed the flow",
+                    "comments": "",
+                    "instanceIdentifier": "b03675ac-01a0-1000-1e64-cf6b015f1527"
+                },
+                "destination": {
+                    "id": "4307f10b-245c-3627-aa9b-2117acfb7560",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Poll GitHub Events API",
+                    "comments": "60s default matches GitHub's X-Poll-Interval; re-tune if a poll response's own X-Poll-Interval header (captured below) says otherwise. If-None-Match/Authorization are only sent when the referenced attribute/parameter is non-empty.",
+                    "instanceIdentifier": "a4f5eccb-01a0-1000-3665-7341bd5aa6d2"
+                },
+                "labelIndex": 0,
+                "zIndex": 6,
+                "selectedRelationships": [
+                    "success"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "d11012d3-42bf-329e-835e-acd7480f4a4d",
+                "instanceIdentifier": "b0411620-01a0-1000-0784-7858d3779581",
+                "name": "",
+                "source": {
+                    "id": "1779332a-ee93-33c3-9ed3-d575ab2b965b",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Retry on connection failure",
+                    "comments": "FR-005: retries InvokeHTTP's Failure/Retry relationships (connection errors, non-2xx) with penalised backoff, distinct from the rate-limit path below. retries_exceeded routes to the shared operational-warning log rather than looping forever.",
+                    "instanceIdentifier": "a6e45ed6-01a0-1000-0ca8-956eb07970b9"
+                },
+                "destination": {
+                    "id": "4307f10b-245c-3627-aa9b-2117acfb7560",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Poll GitHub Events API",
+                    "comments": "60s default matches GitHub's X-Poll-Interval; re-tune if a poll response's own X-Poll-Interval header (captured below) says otherwise. If-None-Match/Authorization are only sent when the referenced attribute/parameter is non-empty.",
+                    "instanceIdentifier": "a4f5eccb-01a0-1000-3665-7341bd5aa6d2"
+                },
+                "labelIndex": 0,
+                "zIndex": 8,
+                "selectedRelationships": [
+                    "retry"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [
+                    {
+                        "x": 960,
+                        "y": -136
+                    }
+                ],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "81d411fc-d6f8-3710-b104-c886c8302218",
+                "instanceIdentifier": "b40707cc-01a0-1000-80b7-bac7ccbf46bb",
+                "name": "",
+                "source": {
+                    "id": "14c0d650-9cdf-3a01-a035-0a6204f8dc51",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Count events in response",
+                    "comments": "Counted before SplitJson runs, on the still-whole response array - the 300-event ceiling check downstream needs the original page size, which is lost once the array is split into one flowfile per event.",
+                    "instanceIdentifier": "b3dd83e1-01a0-1000-ce48-0dd8cf1f1962"
+                },
+                "destination": {
+                    "id": "245b8c8b-8c9a-31d2-8c3d-004a4baae1ae",
+                    "type": "PROCESSOR",
+                    "groupId": "8077dfc2-532a-318e-b386-b1b5c1b850e1",
+                    "name": "Log operational warning",
+                    "comments": "Shared sink for: rate-limit-exhausted polls, and RetryFlowFile's retries_exceeded. Visible in NiFi's bulletin board / app log, not silently dropped.",
+                    "instanceIdentifier": "b3dcc1e4-01a0-1000-a12c-12bf49d902d3"
+                },
+                "labelIndex": 0,
+                "zIndex": 14,
+                "selectedRelationships": [
+                    "failure",
+                    "unmatched"
+                ],
+                "backPressureObjectThreshold": 10000,
+                "backPressureDataSizeThreshold": "1 GB",
+                "flowFileExpiration": "0 sec",
+                "prioritizers": [],
+                "bends": [],
+                "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+                "partitioningAttribute": "",
+                "loadBalanceCompression": "DO_NOT_COMPRESS",
+                "componentType": "CONNECTION",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            }
+        ],
+        "labels": [],
+        "funnels": [],
+        "controllerServices": [
+            {
+                "identifier": "77d759a7-3621-3b27-b7b8-d519f6563117",
+                "instanceIdentifier": "b4551e54-01a0-1000-5be6-66f7b63b9794",
+                "name": "Kafka3ConnectionService",
+                "comments": "",
+                "type": "org.apache.nifi.kafka.service.Kafka3ConnectionService",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-kafka-3-service-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "ack.wait.time": "5 sec",
+                    "sasl.username": null,
+                    "max.poll.records": "10000",
+                    "bootstrap.servers": "kafka:9092",
+                    "sasl.kerberos.service.name": null,
+                    "security.protocol": "PLAINTEXT",
+                    "SSL Context Service": null,
+                    "sasl.mechanism": "GSSAPI",
+                    "isolation.level": "read_committed",
+                    "oauth2-access-token-provider-service": null,
+                    "max.block.ms": "5 sec",
+                    "kerberos-user-service": null,
+                    "default.api.timeout.ms": "60 sec"
+                },
+                "propertyDescriptors": {
+                    "ack.wait.time": {
+                        "name": "ack.wait.time",
+                        "displayName": "Acknowledgment Wait Time",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "sasl.username": {
+                        "name": "sasl.username",
+                        "displayName": "SASL Username",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "max.poll.records": {
+                        "name": "max.poll.records",
+                        "displayName": "Max Poll Records",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "bootstrap.servers": {
+                        "name": "bootstrap.servers",
+                        "displayName": "Bootstrap Servers",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "sasl.kerberos.service.name": {
+                        "name": "sasl.kerberos.service.name",
+                        "displayName": "Kerberos Service Name",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "security.protocol": {
+                        "name": "security.protocol",
+                        "displayName": "Security Protocol",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "SSL Context Service": {
+                        "name": "SSL Context Service",
+                        "displayName": "SSL Context Service",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "sasl.mechanism": {
+                        "name": "sasl.mechanism",
+                        "displayName": "SASL Mechanism",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "isolation.level": {
+                        "name": "isolation.level",
+                        "displayName": "Transaction Isolation Level",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "oauth2-access-token-provider-service": {
+                        "name": "oauth2-access-token-provider-service",
+                        "displayName": "OAuth2 Access Token Provider Service",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "max.block.ms": {
+                        "name": "max.block.ms",
+                        "displayName": "Max Metadata Wait Time",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "kerberos-user-service": {
+                        "name": "kerberos-user-service",
+                        "displayName": "Kerberos User Service",
+                        "identifiesControllerService": true,
+                        "sensitive": false,
+                        "dynamic": false
+                    },
+                    "sasl.password": {
+                        "name": "sasl.password",
+                        "displayName": "SASL Password",
+                        "identifiesControllerService": false,
+                        "sensitive": true,
+                        "dynamic": false
+                    },
+                    "default.api.timeout.ms": {
+                        "name": "default.api.timeout.ms",
+                        "displayName": "Client Timeout",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false
+                    }
+                },
+                "controllerServiceApis": [
+                    {
+                        "type": "org.apache.nifi.kafka.service.api.KafkaConnectionService",
+                        "bundle": {
+                            "group": "org.apache.nifi",
+                            "artifact": "nifi-kafka-service-api-nar",
+                            "version": "2.12.0"
+                        }
+                    }
+                ],
+                "scheduledState": "DISABLED",
+                "bulletinLevel": "WARN",
+                "componentType": "CONTROLLER_SERVICE",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            },
+            {
+                "identifier": "91a88bce-c5db-3702-83fc-c791ab1e9042",
+                "instanceIdentifier": "b4384b67-01a0-1000-7a17-2ccaa1803f57",
+                "name": "topic-map-lookup",
+                "comments": "",
+                "type": "org.apache.nifi.lookup.PropertiesFileLookupService",
+                "bundle": {
+                    "group": "org.apache.nifi",
+                    "artifact": "nifi-lookup-services-nar",
+                    "version": "2.12.0"
+                },
+                "properties": {
+                    "Configuration File": "/opt/nifi/topic-map/topic-map.properties"
+                },
+                "propertyDescriptors": {
+                    "Configuration File": {
+                        "name": "Configuration File",
+                        "displayName": "Configuration File",
+                        "identifiesControllerService": false,
+                        "sensitive": false,
+                        "dynamic": false,
+                        "resourceDefinition": {
+                            "cardinality": "SINGLE",
+                            "resourceTypes": [
+                                "FILE"
+                            ]
+                        }
+                    }
+                },
+                "controllerServiceApis": [
+                    {
+                        "type": "org.apache.nifi.lookup.StringLookupService",
+                        "bundle": {
+                            "group": "org.apache.nifi",
+                            "artifact": "nifi-standard-services-api-nar",
+                            "version": "2.12.0"
+                        }
+                    },
+                    {
+                        "type": "org.apache.nifi.lookup.LookupService",
+                        "bundle": {
+                            "group": "org.apache.nifi",
+                            "artifact": "nifi-standard-services-api-nar",
+                            "version": "2.12.0"
+                        }
+                    }
+                ],
+                "scheduledState": "DISABLED",
+                "bulletinLevel": "WARN",
+                "componentType": "CONTROLLER_SERVICE",
+                "groupIdentifier": "8077dfc2-532a-318e-b386-b1b5c1b850e1"
+            }
+        ],
+        "parameterContextName": "github-ingestion",
+        "defaultFlowFileExpiration": "0 sec",
+        "defaultBackPressureObjectThreshold": 10000,
+        "defaultBackPressureDataSizeThreshold": "1 GB",
+        "scheduledState": "ENABLED",
+        "executionEngine": "INHERITED",
+        "maxConcurrentTasks": 1,
+        "statelessFlowTimeout": "1 min",
+        "flowFileConcurrency": "UNBOUNDED",
+        "flowFileOutboundPolicy": "STREAM_WHEN_AVAILABLE",
+        "componentType": "PROCESS_GROUP"
+    },
+    "externalControllerServices": {},
+    "parameterContexts": {
+        "github-ingestion": {
+            "name": "github-ingestion",
+            "parameters": [
+                {
+                    "name": "GITHUB_TOKEN",
+                    "description": "",
+                    "sensitive": false,
+                    "provided": false
+                }
+            ],
+            "inheritedParameterContexts": [],
+            "description": "",
+            "componentType": "PARAMETER_CONTEXT"
+        }
+    },
+    "flowEncodingVersion": "1.0",
+    "parameterProviders": {},
+    "latest": false
+}

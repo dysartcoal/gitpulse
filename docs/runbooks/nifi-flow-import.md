@@ -1,18 +1,25 @@
-# Runbook — importing, verifying, and re-exporting the NiFi flow
+# Runbook — building, verifying, and exporting the NiFi flow
 
 Context: `nifi/flow/github-events-flow.xml` (T009) was hand-authored without a running NiFi
-instance available to import it into, so processor types, bundle versions, and property names are
-a best effort, not a confirmed-working flow — the file's own header comment says as much. Per
-Constitution Principle I (Evidence Over Assumption), a decision/artifact without verification is
-treated as unresolved even though the file already exists. This runbook is how to close that gap:
-import the hand-written template into a real NiFi instance, fix whatever doesn't wire up as
-intended, run it against the real GitHub Events API and local Kafka, then export NiFi's own
+instance available to import it into. A structural comparison against a real NiFi export (see
+`exploration/investigations/2026-09-14-compare-nifi-basic-w-claude-generated/`) later showed the
+file uses a fundamentally wrong Template XML schema — not a minor fixable gap — so import-then-fix
+was abandoned as an approach. Separately, this project moved from NiFi 1.27.0 to 2.12.0
+(`infra/docker-compose.yml`), and NiFi 2.0 **removes Templates entirely** — so the old
+import-a-template mechanism this runbook originally described isn't just superseded, it no longer
+exists in the running NiFi's UI at all.
+
+Per Constitution Principle I (Evidence Over Assumption), a decision/artifact without verification
+is treated as unresolved even though the file already exists. This runbook is how to close that
+gap on NiFi 2.12.0: build the flow directly on the canvas (using
+`exploration/scratch/2026-09-14-nifi-flow-build/build-guide.md` as the processor-by-processor
+checklist), run it against the real GitHub Events API and local Kafka, then export NiFi's own
 verified flow definition to replace the hand-written draft — so the committed file is something
 NiFi actually produced and ran, not something typed and guessed at.
 
-Do this manually via the NiFi UI (not scripted) the first time through — the goal is to build
-familiarity with how NiFi processors, controller services, and Parameter Contexts are actually
-configured, not just to get a working file out the other end.
+Do this manually via the NiFi UI (not scripted) — the goal is to build familiarity with how NiFi
+processors, controller services, and Parameter Contexts are actually configured, not just to get a
+working file out the other end.
 
 ## Prerequisites
 
@@ -36,22 +43,15 @@ configured, not just to get a working file out the other end.
 4. Log in with `admin` / the value of `NIFI_ADMIN_PASSWORD` if you set one, otherwise the
    compose file's default (`gitpulse-local-12345` — see `infra/docker-compose.yml`).
 
-## 2. Import the template
+## 2. Build the flow
 
-1. On the NiFi canvas, open the hamburger menu (top right) → **Templates**, then **Upload
-   Template** and select `nifi/flow/github-events-flow.xml`.
-2. Drag the **Template** icon from the top toolbar onto the canvas, select "GitHub Events
-   Ingestion" from the dropdown, and click **Add**.
-3. **What to look for:** if NiFi rejects the import outright (rather than placing processors on
-   the canvas with warning triangles), the file has a structural problem — the "Result" section
-   below is where you record what actually happened. A partial import with individual processors
-   showing a warning icon is expected and fine; that's what the rest of this runbook walks through
-   fixing.
+Follow `exploration/scratch/2026-09-14-nifi-flow-build/build-guide.md` processor by processor —
+it's the checklist derived from this flow's design intent (processor types, property values,
+wiring, the reasoning behind each step), built for NiFi 2.12.0 specifically (the `Kafka Connection
+Service` controller service `PublishKafka` now requires, in place of 1.x's direct
+`bootstrap.servers` property, is the one real behavioural difference from the original design).
 
 ## 3. Create the Parameter Context for `GITHUB_TOKEN`
-
-The template intentionally does **not** encode this — the file's header comment (and T009) leaves
-it to be done by hand, since Template XML's parameter-context support is version-dependent.
 
 1. Hamburger menu → **Parameter Contexts** → **+** to create one, named e.g.
    `github-ingestion`.
@@ -63,51 +63,38 @@ it to be done by hand, since Template XML's parameter-context support is version
    - **Manual fallback** — type the token directly into the parameter's value (mark it
      "sensitive" if NiFi offers that toggle) if the provider route doesn't behave as expected on
      first try.
-3. On the canvas, right-click the imported process group → **Configure** → **Parameter Context**
-   tab → select `github-ingestion` → **Apply**.
-4. **What to look for:** the `Poll GitHub Events API` processor's `Request Header Authorization`
-   property should show `token #{GITHUB_TOKEN}` resolving without an "unknown parameter" error
-   once the context is assigned — check this before moving on, since every downstream step
-   depends on the process group actually having a context attached.
+3. Assign the `github-ingestion` context to wherever you're building the flow (the root canvas, or
+   the process group if you nested one) via **Configure** → **Parameter Context** tab → **Apply**.
+4. **What to look for:** `Poll GitHub Events API`'s `Authorization` header property should show
+   `token #{GITHUB_TOKEN}` resolving without an "unknown parameter" error once the context is
+   assigned — check this before moving on, since every downstream step depends on it.
 
-## 4. Walk each processor against the file's inline documentation
+## 4. Create (or confirm) the controller services this flow depends on
 
-Go through every processor and controller service on the canvas, right-click → **Configure**, and
-compare what NiFi actually populated against the description in the XML's comments (the flow
-summary in the header, plus each processor's own `<comment>`). Fix anything that differs. Two
-spots the header comment specifically flags as unverified:
+Two controller services, both **scoped to the `GitHub Events Flow` process group** (right-click
+empty canvas space *inside* that group → **Configure** → **Controller Services** tab → **+** —
+not the root-canvas/instance-wide controller services under the hamburger menu):
 
-1. **`Publish to Kafka`** — the file uses `PublishKafka_2_6`
-   (`nifi-kafka-2-6-nar`). Confirm this processor type actually exists in the `apache/nifi:1.27.0`
-   image's available processor list (type `PublishKafka` into the "Add Processor" filter and see
-   what versions are offered) — NiFi's Kafka-client-versioned processor class names have changed
-   across releases, and this is the single highest-risk guess in the file.
-2. **Stateful Usage on the two `UpdateAttribute` processors** — Template XML has no way to encode
-   processor *state* (as opposed to properties), so these need manual configuration after import:
-   - `Track ETag and rate-limit headers`: open **Advanced** → **Stateful Usage**, add a mapping
-     that stores `${invokehttp.response.header.ETag}` under the state key `previous.etag` — this
-     is what lets `Poll GitHub Events API`'s `Request Header If-None-Match` (which reads
-     `${previous.etag}`) actually carry the ETag forward between scheduled runs, not just within a
-     single execution.
-   - `Increment 300-event counter`: same **Advanced** → **Stateful Usage** panel, incrementing a
-     state key `poll.max.window.count` by 1 each time a flowfile reaches this processor.
-3. For every other processor, confirm the **Scheduling**, **Properties**, and **Relationships**
-   tabs match the `<properties>`/`<autoTerminatedRelationships>`/`<comment>` block for that
-   processor's `<id>` in the XML — record any mismatch you had to correct in the Result section
-   below.
+1. **`topic-map-lookup`** (`PropertiesFileLookupService`) — needed before you configure `Resolve
+   Kafka topic` (build guide step 12). This is purely a local file lookup — no actual Kafka broker
+   connectivity involved, despite the name.
+   - Add a `PropertiesFileLookupService`, rename it `topic-map-lookup`.
+   - Properties tab: `Configuration File` = `/opt/nifi/topic-map/topic-map.properties` (the
+     read-only bind mount from `../config` in `infra/docker-compose.yml` — nothing to change on
+     the host side, the file already exists there from T007).
+   - If NiFi can't read it once enabled, the mount path or file permissions are the first thing to
+     check, not the processor config.
+2. **The Kafka Connection Service** (`Kafka3ConnectionService`) — needed before you configure
+   `Publish to Kafka` (build guide step 15), *not* before `Resolve Kafka topic` — don't set this
+   one up until you actually reach step 15.
+   - `bootstrap.servers` = `kafka:9092` (the Compose **service** name, not `gitpulse-kafka` — see
+     `exploration/notes/2026-09-11-docker-compose-networking.md` for why).
 
-## 5. Confirm the controller service resolves the shared routing file
+Whichever one you're setting up, **enable it** (bolt icon) once configured — a disabled controller
+service blocks any processor that references it from starting, and won't even appear as a
+selectable option in a processor's own property dropdown until it's been added at this level.
 
-1. Hamburger menu → **Controller Settings** → **Controller Services**, find `topic-map-lookup`
-   (`PropertiesFileLookupService`).
-2. Confirm its `Configuration File` property (`/opt/nifi/topic-map/topic-map.properties`) is
-   readable — this is the read-only bind mount from `../config` in `infra/docker-compose.yml`
-   (line 91). If NiFi can't read it, the mount path or file permissions are the first thing to
-   check, not the processor config.
-3. Enable the controller service (bolt icon) before starting the flow — a disabled controller
-   service will block `Resolve Kafka topic` from starting.
-
-## 6. Start the flow and watch it run
+## 5. Start the flow and watch it run
 
 1. Select all processors on the canvas (Ctrl/Cmd+A) and click **Start** (the play icon), or start
    them individually in dependency order if you want to watch each stage settle.
@@ -123,37 +110,36 @@ spots the header comment specifically flags as unverified:
    `-other-activity` too).
 4. **What to look for:** messages appearing with the expected JSON event payload, keyed by event
    `id` (per `kafka-topic-contract.md`) — if nothing appears after a couple of poll intervals,
-   check the Bulletin Board first (most likely: the `PublishKafka` processor type from Step 4.1
-   wasn't actually valid and the process group failed to start cleanly).
+   check the Bulletin Board first.
 
-## 7. Export the verified flow and replace the hand-written file
+## 6. Export the verified flow and replace the hand-written file
 
 Once the flow runs cleanly end to end (events observed in all relevant Kafka topics, no bulletin
 errors):
 
-1. Select the `GitHub Events Ingestion` process group → right-click → **Download flow
-   definition** (NiFi 1.27.0 exports this as flow definition JSON, not the older Template XML
-   format — that's expected and fine; it supersedes the hand-written template either way).
-2. Save it over `nifi/flow/github-events-flow.xml` — or alongside it as
-   `nifi/flow/github-events-flow.json` if the format changed, updating any reference to the old
-   filename (`plan.md`'s Project Structure, `tasks.md` T009) to match.
-3. Replace the file's header comment: remove the "hand-authored, unverified" warning and record
-   instead that it was exported from a running, verified `apache/nifi:1.27.0` instance, plus the
-   date.
-4. Update `docs/phases/phase-1-log.md` with what actually happened during import — especially any
-   processor type/property that turned out to differ from the hand-written guess, since that's
-   exactly the kind of "assumption vs. reality" gap Constitution Principle I exists to catch and
-   record, not silently fix and move on from.
+1. Select everything (or the process group, if nested) → right-click → **Download flow
+   definition** — NiFi 2.12.0 exports this as flow definition JSON; there's no Template XML option
+   any more, so this is the only export path.
+2. Save it as `nifi/flow/github-events-flow.json`, updating any reference to the old
+   `.xml` filename (`plan.md`'s Project Structure, `tasks.md` T009) to match, and remove the old
+   hand-written `.xml` file.
+3. Give the new file a header comment recording that it was exported from a running, verified
+   `apache/nifi:2.12.0` instance, plus the date — replacing the old file's "hand-authored,
+   unverified" warning.
+4. Update `docs/phases/phase-1-log.md` with what actually happened while building — especially any
+   processor property or relationship that turned out to differ from the build guide's expectation,
+   since that's exactly the kind of "assumption vs. reality" gap Constitution Principle I exists to
+   catch and record, not silently fix and move on from.
 
 ## Result
 
 _(fill in as you go)_
 
-- Import succeeded without modification: `___` / required fixes: `___`
-- `PublishKafka` processor type that actually worked: `___`
+- Build completed without unresolved processor validation warnings: `___`
+- Kafka Connection Service configured and working: `___`
 - Stateful Usage configured on both `UpdateAttribute` processors: `___`
 - Events observed in all four Kafka topics: `___`
-- Flow definition re-exported and committed: `___`
+- Flow definition exported and committed as `nifi/flow/github-events-flow.json`: `___`
 
 ## Other ways to generate this file (not used here, noted for later)
 
