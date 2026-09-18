@@ -1,0 +1,13 @@
+# Secret scanning before every commit - added 2026-09-19 after manually checking a large,
+# multi-file commit for leaked credentials/local paths by hand (a one-off grep, not a durable
+# safeguard). gitleaks has a real, actively-maintained pattern database (hundreds of provider
+# signatures plus entropy-based detection for generic secrets) that a hand-rolled check can't
+# match - this makes that check automatic and durable rather than something to remember to ask for.
+#
+# Install once per clone: pip install pre-commit && pre-commit install
+# Run manually against everything (not just staged changes): pre-commit run --all-files
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

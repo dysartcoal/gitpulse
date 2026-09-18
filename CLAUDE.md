@@ -43,6 +43,30 @@ Every decision in this repo is expected to trace back to the project constitutio
 **Any AI-facing or external-facing interface reads from the gold layer only** (ADR-0001) — this
 constraint applies regardless of which phase or feature is being touched.
 
+## Secret scanning — gitleaks pre-commit hook
+
+Enforces the constitution's "Security by Enforcement, Not Convention" principle (secrets are never
+committed — enforced mechanically, not by remembering to check). `.pre-commit-config.yaml` wires
+[gitleaks](https://github.com/gitleaks/gitleaks) to run on every commit; it scans staged content
+against gitleaks' maintained pattern database (provider-specific signatures plus entropy-based
+detection for generic secrets) rather than a hand-rolled grep. Added 2026-09-19 after a one-off
+manual check of a large multi-file commit turned up nothing but wasn't repeatable or trustworthy on
+its own.
+
+```bash
+.venv/bin/pip install pre-commit   # once, into the project venv
+.venv/bin/pre-commit install       # wires .git/hooks/pre-commit for this clone
+pre-commit run --all-files         # run manually against the whole repo, not just staged changes
+```
+
+Verified against real detections, not just a clean pass — gitleaks correctly flagged a randomly
+generated AWS-shaped access key (`aws-access-token` rule) with `RuleID`/`Secret`/`Fingerprint`
+output and a non-zero exit code. Two false negatives surfaced along the way, both explained by the
+test input rather than a broken hook: a malformed fake GitHub PAT (wrong length for the `ghp_`
+pattern) and AWS's own published documentation placeholder (`AKIAIOSFODNN7EXAMPLE`), which gitleaks
+allowlists by design because it's a known non-secret. Worth remembering if a future check "passes"
+unexpectedly — confirm with a genuinely secret-shaped value before trusting a clean result.
+
 ## Code comments — self-documenting code
 
 Every function, class, and non-trivial block of logic carries a comment stating its expected
