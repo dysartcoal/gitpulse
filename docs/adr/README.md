@@ -11,3 +11,4 @@ One file per significant decision, using a short Context / Decision / Consequenc
 | [0005](0005-nifi-kafka-self-hosted.md) | NiFi and Kafka run self-hosted, not as managed cloud services |
 | [0006](0006-per-layer-testing-and-data-quality.md) | Testing and data quality are built from Phase 1, not bolted on at the end |
 | [0007](0007-iam-user-with-mfa-over-identity-center.md) | IAM user with MFA and STS session tokens, not IAM Identity Center, for personal admin access |
+| [0008](0008-databricks-lakehouse-and-ai-working-agreement.md) | Databricks lakehouse for Phase 2 onward; Spec Kit retired for a lighter, human-authored workflow |

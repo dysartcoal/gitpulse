@@ -223,3 +223,10 @@ Task: "Implement durable idempotency index in src/consumer/idempotency.py"
 - The integration test file (`tests/integration/test_ingestion_pipeline.py`) is created in US1 (T015) and extended in US2 (T023) rather than duplicated — both assertions exercise the same real local Kafka broker per FR-008
 - Commit after each task or logical group
 - Stop at any checkpoint to validate the story independently
+
+---
+
+## Phase 7: Convergence
+
+- [ ] T034 CRITICAL: Mark the `GITHUB_TOKEN` parameter as sensitive in the NiFi Parameter Context `github-ingestion` (currently `"sensitive": false` in `nifi/flow/github-events-flow.json`) before a real PAT is ever set — NiFi's Parameter Context editor requires deleting and recreating the parameter to change its sensitivity, so this must happen before it holds a real value, not after per Constitution II (contradicts)
+- [ ] T035 Correct the stale `nifi/flow/github-events-flow.xml` file references in tasks.md T009 and T021 (both checked complete) to point at `nifi/flow/github-events-flow.json`, the NiFi-exported flow definition actually running — the `.xml` file's own header already marks it SUPERSEDED, but the task descriptions that named it as the deliverable still don't reflect that per tasks.md T009, T021 (contradicts)

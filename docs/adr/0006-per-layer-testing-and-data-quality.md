@@ -1,6 +1,6 @@
 # 0006 — Testing and data quality are built from Phase 1, not bolted on at the end
 
-**Status:** Accepted
+**Status:** Accepted; partially superseded by ADR-0008 (Great Expectations and dbt tests replaced by Lakeflow expectations and PySpark unit tests)
 **Date:** 2026-08-20
 
 ## Context
