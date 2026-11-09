@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PushEvent payload",
+  "description": "Only the fields this pipeline actually relies on downstream are required; additionalProperties is left open (default) since GitHub's real PushEvent payload carries several more fields we don't currently use - requiring them would quarantine otherwise-good events over a field nobody reads.",
+  "type": "object",
+  "required": ["push_id", "ref", "head", "before", "commits"],
+  "properties": {
+    "push_id": { "type": "integer" },
+    "ref": { "type": "string" },
+    "head": { "type": "string" },
+    "before": { "type": "string" },
+    "commits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sha", "message"],
+        "properties": {
+          "sha": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

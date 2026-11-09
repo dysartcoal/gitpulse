@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PullRequestEvent payload",
+  "description": "Only the fields this pipeline actually relies on downstream are required (same rationale as push_event.schema.json) - additionalProperties stays open for the rest of GitHub's real payload.",
+  "type": "object",
+  "required": ["action", "number", "pull_request"],
+  "properties": {
+    "action": { "type": "string" },
+    "number": { "type": "integer" },
+    "pull_request": {
+      "type": "object",
+      "required": ["id", "number", "state", "title"],
+      "properties": {
+        "id": { "type": "integer" },
+        "number": { "type": "integer" },
+        "state": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    }
+  }
+}

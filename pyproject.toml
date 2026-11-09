@@ -1,0 +1,49 @@
+# confluent-kafka and jsonschema are the only runtime dependencies - pytest and
+# testcontainers live in the "test" extra below, not here, so a production
+# install of the consumer doesn't pull in test-only tooling.
+[project]
+name = "gitpulse"
+version = "0.1.0"
+description = "GitPulse Phase 1: NiFi/Kafka ingestion of public GitHub activity events"
+requires-python = ">=3.12"
+dependencies = [
+    "confluent-kafka>=2.5",
+    "jsonschema>=4.22",
+]
+
+# testcontainers[kafka] spins up a real local Kafka broker for the integration
+# test (ADR-0006: "real local Kafka, not a mock") - it's a test-time-only
+# dependency, so it's kept out of the main dependency list above.
+[project.optional-dependencies]
+test = [
+    "pytest>=8.2",
+    "testcontainers[kafka]>=4.7",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# src-layout: src/consumer/ installs as the importable "consumer" package.
+# This is what lets tests (and infra/create_topics.py) `import consumer.x`
+# without manually fiddling with sys.path in every file that needs it.
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+# 100 rather than ruff's 88 default - long Kafka/NiFi config keys and
+# descriptive test names get cramped at 88.
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "infra"]
+
+# E/F: pyflakes/pycodestyle correctness baseline. I: import sorting, so
+# "does this file even import what it uses" stays visually obvious. UP:
+# flags old-style syntax a 3.12-only codebase never needs to keep around.
+# B: bugbear - catches common correctness footguns (mutable defaults, etc.)
+# that plain E/F don't.
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"

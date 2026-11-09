@@ -1,0 +1,126 @@
+# Local, zero-ongoing-cost NiFi + Kafka stack (ADR-0003, ADR-0005).
+# Kafka runs in KRaft mode - no separate ZooKeeper container.
+#
+# GITHUB_TOKEN (optional): export it in your shell, or put it in a .env file
+# next to this compose file, before `docker compose up`. Unset, NiFi's
+# InvokeHTTP falls back to unauthenticated polling (60 req/hour instead of
+# 5,000 - see research.md).
+
+services:
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: gitpulse-kafka
+    # Restart on crash/host-reboot without manual intervention - matches
+    # SC-001's "runs unattended for 24h+" requirement; a broker that stays
+    # down after a transient failure would silently break ingestion.
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft mode (no ZooKeeper container): this single node is both the
+      # Kafka broker and its own metadata controller (ADR-0005 - one fewer
+      # moving part to run/learn than a broker+ZooKeeper pair).
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      # The Docker Compose *service* name, not "localhost" - confirmed wrong
+      # 2026-09-18 when NiFi (a different container) became the first real
+      # container-to-container Kafka client this project built: a broker
+      # advertises this address to clients for their follow-up connections,
+      # and "localhost" from inside gitpulse-nifi means gitpulse-nifi's own
+      # loopback, not Kafka's - every existing docker-exec-based command
+      # happened to still work despite this, since "localhost" genuinely
+      # does mean itself from *inside* the kafka container, masking the bug
+      # until a different container tried to connect. "kafka:9092" resolves
+      # correctly both for other containers (via Docker's DNS) and for the
+      # existing docker-exec commands (a container's own service name
+      # resolves to itself too) - see
+      # exploration/notes/2026-09-11-docker-compose-networking.md for the
+      # general service-name-vs-container-name lesson this is an instance of.
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      # This node is the sole voter in its own KRaft quorum - single-broker
+      # setup (ADR-0005), so there's no other node to vote with.
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # 1, not Kafka's usual production default of 3 - there's only one
+      # broker to replicate to; asking for 3 would make internal topics
+      # (like consumer offsets) fail to create.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # Any fixed string works for a single-node KRaft cluster; it only has
+      # to be stable across restarts (encoded once into the meta.properties
+      # in the kafka-data volume below), not globally unique.
+      CLUSTER_ID: gitpulse-kraft-cluster-1
+    volumes:
+      # Named volume so a `docker compose restart`/host reboot doesn't lose
+      # already-published-but-not-yet-consumed messages - required for
+      # SC-001's "zero event loss", not just a nice-to-have.
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      # Cheap, no-side-effect API call that only succeeds once the broker is
+      # actually accepting client connections - depends_on's default
+      # "container started" isn't enough, since a JVM broker can still be
+      # mid-startup well after the process itself has launched.
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  nifi:
+    # 2.x, not 1.x: Snowflake's Openflow (a managed NiFi offering relevant to this project's
+    # job-market-driven skills goal) is built on NiFi 2.0, and 1.x's Template XML mechanism this
+    # project initially relied on is deprecated there and removed outright in 2.0 - verified via
+    # direct image inspection (2026-09-15) that NIFI_WEB_HTTPS_HOST/SINGLE_USER_CREDENTIALS_* env
+    # vars and every other processor this flow uses behave identically to 1.27.0; PublishKafka is
+    # the one real behaviour change, now requiring a separate Kafka Connection Service controller
+    # service rather than bootstrap.servers as a direct processor property - see
+    # exploration/scratch/2026-09-14-nifi-flow-build/build-guide.md.
+    image: apache/nifi:2.12.0
+    container_name: gitpulse-nifi
+    restart: unless-stopped
+    depends_on:
+      # Waits for the healthcheck above, not just "container started" - NiFi
+      # publishing before Kafka can accept connections would surface as
+      # PublishKafka failures on the very first poll rather than a clean
+      # startup order.
+      kafka:
+        condition: service_healthy
+    ports:
+      # Configure port forwarding from port 8443 on the localhost on the platform external 
+      # to the docker environment (e.g. the Mac locahlost) to
+      # port 8443 on the docker managed URL for nifi
+      - "8443:8443"
+    environment:
+      SINGLE_USER_CREDENTIALS_USERNAME: admin
+      # Fine as a default for a stack that's local-only and not exposed
+      # beyond localhost (ADR-0003's local-first scope) - override via
+      # NIFI_ADMIN_PASSWORD for anything longer-lived than a quick local run.
+      SINGLE_USER_CREDENTIALS_PASSWORD: ${NIFI_ADMIN_PASSWORD:-gitpulse-local-12345}
+      # Passed through so the flow's Parameter Context (T009) can read it via
+      # NiFi's EnvironmentVariableParameterProvider. Empty is fine - unauthenticated.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      NIFI_WEB_HTTPS_HOST: 0.0.0.0
+    volumes:
+      # Named volumes so the imported flow definition and any in-flight
+      # flowfile state survive a container restart - without these, every
+      # restart would mean re-importing the flow by hand.
+      - nifi-conf:/opt/nifi/nifi-current/conf
+      - nifi-state:/opt/nifi/nifi-current/state
+      # Read-only: the shared topic-routing source of truth (T007), read by
+      # the flow's PropertiesFileLookupService controller service (T009).
+      - ../config:/opt/nifi/topic-map:ro
+    healthcheck:
+      # NiFi's own web UI HTTP status, once it actually returns 200 - the
+      # 90s start_period exists because NiFi's JVM startup is genuinely slow
+      # (schema/extension loading), not because anything is expected to fail.
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' https://localhost:8443/nifi/ | grep -q 200 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+volumes:
+  kafka-data:
+  nifi-conf:
+  nifi-state:

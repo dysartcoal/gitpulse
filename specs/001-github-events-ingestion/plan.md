@@ -52,14 +52,15 @@ web service — there is no user-facing frontend in this feature.
 
 **Performance Goals**: No throughput target beyond what the GitHub Events API itself allows —
 ingestion is source-rate-limited, not a target the pipeline needs to hit independently. Newly
-polled events should appear in the raw store within a small, bounded number of poll intervals
-(see Constraints).
+polled events should appear in the raw store within 5 poll intervals (see Constraints).
 
 **Constraints**: Zero ongoing cloud cost (ADR-0003) — the entire Phase 1 stack runs on Docker
 Compose with no billed cloud resource. Must run unattended for at least 24 continuous hours with
 zero event loss and zero duplication (SC-001). Poll interval and NiFi `InvokeHTTP` scheduling
 respect GitHub's published unauthenticated/PAT-authenticated rate limits with headroom, using
-ETag caching to avoid burning rate-limit budget on unchanged responses.
+ETag caching to avoid burning rate-limit budget on unchanged responses. Newly polled events must
+appear in the raw store within 5 poll intervals of being retrieved (bounds Acceptance Scenario 1's
+"reasonable, bounded delay").
 
 **Scale/Scope**: Single GitHub Events API feed, single operator, single-node self-hosted NiFi and
 Kafka (no clustering). Not multi-tenant; no per-user access control (per spec Assumptions).

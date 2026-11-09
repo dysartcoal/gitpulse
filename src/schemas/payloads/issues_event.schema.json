@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IssuesEvent payload",
+  "description": "Only the fields this pipeline actually relies on downstream are required (same rationale as push_event.schema.json) - additionalProperties stays open for the rest of GitHub's real payload.",
+  "type": "object",
+  "required": ["action", "issue"],
+  "properties": {
+    "action": { "type": "string" },
+    "issue": {
+      "type": "object",
+      "required": ["id", "number", "title", "state"],
+      "properties": {
+        "id": { "type": "integer" },
+        "number": { "type": "integer" },
+        "title": { "type": "string" },
+        "state": { "type": "string" }
+      }
+    }
+  }
+}

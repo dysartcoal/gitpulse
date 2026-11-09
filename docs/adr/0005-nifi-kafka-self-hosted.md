@@ -1,6 +1,6 @@
 # 0005 — NiFi and Kafka run self-hosted, not as managed cloud services
 
-**Status:** Accepted
+**Status:** Accepted (Phase 4 Kubernetes migration deferred to a stretch goal by ADR-0008)
 **Date:** 2026-08-20
 
 ## Context

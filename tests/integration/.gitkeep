@@ -1,0 +1,3 @@
+# Placeholder so git tracks this otherwise-empty directory. Remove once User
+# Story 1's integration test (T015, tests/integration/test_ingestion_pipeline.py)
+# lands.

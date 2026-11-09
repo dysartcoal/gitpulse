@@ -58,12 +58,14 @@ logs/
 # as gitignored in plan.md's Project Structure, added here to actually match.
 /data/
 
-# --- Exploration output (investigations & scratch) ---
+# --- Exploration output (investigations, scratch & personal notes) ---
 # Ad hoc/exploratory work and manual test output that isn't part of the shipped
 # project or the formal pytest suite - see exploration/README.md. Only the
-# README.md guide at each level is tracked; everything else here is disposable
-# or evidence-only and shouldn't live in git history.
+# README.md guide at each level is tracked; everything else here is disposable,
+# evidence-only, or personal reference and shouldn't live in git history.
 /exploration/investigations/*
 !/exploration/investigations/README.md
 /exploration/scratch/*
 !/exploration/scratch/README.md
+/exploration/notes/*
+!/exploration/notes/README.md
