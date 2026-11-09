@@ -1,6 +1,6 @@
 # 0008 — Databricks lakehouse for Phase 2 onward; Spec Kit retired for a lighter, human-authored workflow
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-11-09
 
 ## Context
